@@ -1,9 +1,13 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+if (!process.env.MONGO_URI) {
+  throw new Error("MONGO_URI is missing in environment variables");
+}
+
 export default {
   port: process.env.PORT || 5001,
-  mongoUri: process.env.MONGO_URI || "mongodb://localhost:27017/awesome_dev",
+  mongoUri: process.env.MONGO_URI,
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET || "access",
     refreshSecret: process.env.JWT_REFRESH_SECRET || "refresh",

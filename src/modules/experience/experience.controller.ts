@@ -159,6 +159,8 @@ class ExperienceController {
         data: experiences,
       });
     } catch (error) {
+      console.error("Experience fetch failed:", error);
+
       next(error);
     }
   }

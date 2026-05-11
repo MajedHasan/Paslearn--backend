@@ -5,7 +5,7 @@ export function errorHandler(
   err: any,
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   logger.error(err?.stack ?? err);
 
@@ -15,5 +15,11 @@ export function errorHandler(
       ? "Internal server error"
       : err.message || "Something went wrong";
 
-  res.status(status).json({ message });
+  if (err.name === "MongoServerSelectionError") {
+    return res.status(503).json({
+      message: "Database unavailable",
+    });
+  }
+
+  return res.status(status).json({ message });
 }

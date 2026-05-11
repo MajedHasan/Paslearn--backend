@@ -1,6 +1,6 @@
 import express from "express";
-import helmet from "helmet";
 import cors from "cors";
+import helmet from "helmet";
 import compression from "compression";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
@@ -11,10 +11,12 @@ import { errorHandler } from "./middlewares/error.middleware";
 import logger from "./utils/logger";
 
 import experienceRoutes from "./modules/experience/experience.routes";
+import { connectDB } from "./lib/db";
 
 const app = express();
 
 app.use("/uploads", express.static("uploads"));
+app.set("trust proxy", 1);
 app.use(helmet());
 app.use(
   cors({
@@ -35,6 +37,17 @@ const limiter = rateLimit({
   max: 200,
 });
 app.use(limiter);
+
+// ------------------ For Serverless Server (Like Vercel) ------------------
+app.use("/api", async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+// --------------xx-- For Serverless Server (Like Vercel) --xx--------------
 
 app.use("/api/auth", authRoutes);
 app.use("/api/student", studentRoutes);
