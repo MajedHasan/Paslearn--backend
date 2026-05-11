@@ -18,9 +18,20 @@ const app = express();
 app.use("/uploads", express.static("uploads"));
 app.set("trust proxy", 1);
 app.use(helmet());
+// app.use(
+//   cors({
+//     origin: process.env.FRONTEND_URL || "http://localhost:3000", // your frontend dev URL
+//     credentials: true, // allow cookies/authorization headers
+//   }),
+// );
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000", // your frontend dev URL
+    origin: [
+      process.env.FRONTEND_URL as string,
+      "http://localhost:3000",
+      "https://paslearn.com",
+      "https://www.paslearn.com",
+    ],
     credentials: true, // allow cookies/authorization headers
   }),
 );
