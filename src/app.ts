@@ -4,14 +4,12 @@ import helmet from "helmet";
 import compression from "compression";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
-import authRoutes from "./routes/auth.routes";
-import studentRoutes from "./routes/student/studentProfile.routes";
-import classroomRoutes from "./routes/classroom.routes";
 import { errorHandler } from "./middlewares/error.middleware";
 import logger from "./utils/logger";
 
-import experienceRoutes from "./modules/experience/experience.routes";
 import { connectDB } from "./lib/db";
+
+import routes from "./routes/index.routes";
 
 const app = express();
 
@@ -60,10 +58,11 @@ app.use("/api", async (req, res, next) => {
 });
 // --------------xx-- For Serverless Server (Like Vercel) --xx--------------
 
-app.use("/api/auth", authRoutes);
-app.use("/api/student", studentRoutes);
-app.use("/api/classrooms", classroomRoutes);
-app.use("/api/experiences", experienceRoutes);
+/*
+ All routes
+*/
+app.use("/api", routes);
+
 app.get("/", (req, res) => res.json({ status: "ok", version: "1.0.0" }));
 
 app.use(errorHandler);
