@@ -1,6 +1,31 @@
 import mongoose, { Schema } from "mongoose";
 import { IExperience } from "./experience.interface";
 
+const ExperienceModuleSchema = new Schema(
+  {
+    type: {
+      type: String,
+      enum: ["form", "action", "automation", "tracking"],
+      required: true,
+    },
+
+    key: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    config: {
+      type: Schema.Types.Mixed,
+      default: {},
+    },
+  },
+  {
+    _id: false,
+    minimize: false,
+  },
+);
+
 const ExperienceSchema = new Schema<IExperience>(
   {
     key: {
@@ -87,6 +112,11 @@ const ExperienceSchema = new Schema<IExperience>(
       },
     },
 
+    modules: {
+      type: [ExperienceModuleSchema],
+      default: [],
+    },
+
     payload: {
       type: Schema.Types.Mixed,
       default: {},
@@ -108,6 +138,10 @@ ExperienceSchema.index({
   componentKey: 1,
 });
 
+ExperienceSchema.index({
+  "modules.key": 1,
+});
+
 ExperienceSchema.pre("save", function (next) {
   if (
     this.schedule?.startAt &&
@@ -115,6 +149,14 @@ ExperienceSchema.pre("save", function (next) {
     this.schedule.startAt > this.schedule.endAt
   ) {
     return next(new Error("schedule.startAt cannot be greater than endAt"));
+  }
+
+  if (this.modules?.length) {
+    for (const module of this.modules) {
+      if (!module.type || !module.key) {
+        return next(new Error("Each experience module must have type and key"));
+      }
+    }
   }
 
   next();

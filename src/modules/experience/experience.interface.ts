@@ -11,6 +11,12 @@ export type ExperienceTriggerType =
 
 export type ExperienceTargetScope = "global" | "routes";
 
+export type ExperienceModuleType =
+  | "form"
+  | "action"
+  | "automation"
+  | "tracking";
+
 export interface IExperienceTarget {
   scope: ExperienceTargetScope;
   routes?: string[];
@@ -25,6 +31,12 @@ export interface IExperienceTrigger {
 export interface IExperienceSchedule {
   startAt?: Date;
   endAt?: Date;
+}
+
+export interface IExperienceModule {
+  type: ExperienceModuleType;
+  key: string;
+  config: Record<string, any>;
 }
 
 export interface IExperience extends Document {
@@ -44,6 +56,8 @@ export interface IExperience extends Document {
   trigger?: IExperienceTrigger;
 
   schedule?: IExperienceSchedule;
+
+  modules?: IExperienceModule[];
 
   payload: Record<string, any>;
 

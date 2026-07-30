@@ -1,9 +1,16 @@
 import { Router } from "express";
 
-import ExperienceController from "./experience.controller";
+import {
+  createExperienceController,
+  deleteExperienceController,
+  getActiveExperiencesController,
+  getAllExperiencesController,
+  getExperienceByIdController,
+  getExperienceByKeyController,
+  toggleExperienceController,
+  updateExperienceController,
+} from "./experience.controller";
 
-// Your auth middlewares
-// Example:
 import { requireAuth } from "../../middlewares/auth.middleware";
 import { requireRole } from "../../middlewares/role.middleware";
 
@@ -13,60 +20,61 @@ const router = Router();
 |--------------------------------------------------------------------------
 | Public Routes
 |--------------------------------------------------------------------------
-| Used by frontend runtime
-| Example:
-| app/layout.tsx
-|--------------------------------------------------------------------------
 */
-
-router.get("/public", ExperienceController.getActiveExperiences);
+router.get("/public", getActiveExperiencesController);
 
 /*
 |--------------------------------------------------------------------------
 | Admin Routes
 |--------------------------------------------------------------------------
 */
-
 router.post(
   "/admin",
   requireAuth,
   requireRole("admin"),
-  ExperienceController.createExperience,
+  createExperienceController,
 );
 
 router.get(
   "/admin",
   requireAuth,
   requireRole("admin"),
-  ExperienceController.getAllExperiences,
+  getAllExperiencesController,
 );
 
 router.get(
   "/admin/:id",
   requireAuth,
   requireRole("admin"),
-  ExperienceController.getExperienceById,
+  getExperienceByIdController,
+);
+
+router.get(
+  "/admin/key/:key",
+  requireAuth,
+  requireRole("admin"),
+  getExperienceByKeyController,
 );
 
 router.patch(
   "/admin/:id",
   requireAuth,
   requireRole("admin"),
-  ExperienceController.updateExperience,
+  updateExperienceController,
 );
 
 router.patch(
   "/admin/:id/toggle",
   requireAuth,
   requireRole("admin"),
-  ExperienceController.toggleExperience,
+  toggleExperienceController,
 );
 
 router.delete(
   "/admin/:id",
   requireAuth,
   requireRole("admin"),
-  ExperienceController.deleteExperience,
+  deleteExperienceController,
 );
 
 export default router;
