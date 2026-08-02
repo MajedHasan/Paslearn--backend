@@ -1,6 +1,7 @@
 import FormModel from "../form/form.model";
 import SubmissionModel from "./submission.model";
 import { ISubmission } from "./submission.interface";
+import { executeAutomations } from "../automation/automation.service";
 
 class SubmissionService {
   /**
@@ -20,7 +21,8 @@ class SubmissionService {
         mimeType: string
       }[];
       meta?: Record<string, any>;
-    }
+    },
+    user?: any
   ) {
     // Find enabled form
     const form = await FormModel.findOne({ key: formKey, enabled: true }).lean();
@@ -47,6 +49,25 @@ class SubmissionService {
 
     // Optionally increment submission count on form (if you have the field)
     await FormModel.findByIdAndUpdate(form._id, { $inc: { submissionCount: 1 } });
+
+    try {
+      await executeAutomations({
+        resource: "form",
+        event: "submitted",
+        data: {
+          formId: form._id.toString(),
+          formKey: form.key,
+          submissionId: submission._id.toString(),
+          values: payload.values || {},
+          files: payload.files || [],
+          meta: payload.meta || {},
+        },
+        user: user || undefined,
+      });
+    } catch (err) {
+      console.error("Automation execution failed:", err);
+    }
+
 
     return submission;
   }

@@ -7,8 +7,10 @@ import {
   getAllExperiences,
   getExperienceById,
   getExperienceByKey,
+  getExperienceAnalytics,
   toggleExperience,
   updateExperience,
+  recordImpression,
 } from "./experience.service";
 
 /*
@@ -226,6 +228,53 @@ export async function getExperienceByKeyController(
       success: true,
       data: experience,
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Get Experience Analytics (Admin)
+|--------------------------------------------------------------------------
+*/
+export async function getExperienceAnalyticsController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { id } = req.params;
+    const days = req.query.days ? Number(req.query.days) : 30;
+    const analytics = await getExperienceAnalytics(id, { days });
+    return res.status(200).json({ success: true, data: analytics });
+  } catch (error) {
+    next(error);
+  }
+}
+
+
+
+export async function recordImpressionController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { experienceId, action, sessionId, device, referrer, metadata } = req.body;
+
+    if (!experienceId || !["view", "click", "close", "convert"].includes(action)) {
+      return res.status(400).json({ success: false, message: "Invalid payload" });
+    }
+
+    await recordImpression(experienceId, action, {
+      sessionId,
+      device,
+      referrer,
+      metadata,
+    });
+
+    return res.status(201).json({ success: true });
   } catch (error) {
     next(error);
   }

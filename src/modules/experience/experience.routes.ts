@@ -7,8 +7,10 @@ import {
   getAllExperiencesController,
   getExperienceByIdController,
   getExperienceByKeyController,
+  getExperienceAnalyticsController,
   toggleExperienceController,
   updateExperienceController,
+  recordImpressionController,
 } from "./experience.controller";
 
 import { requireAuth } from "../../middlewares/auth.middleware";
@@ -50,6 +52,13 @@ router.get(
 );
 
 router.get(
+  "/admin/:id/analytics",
+  requireAuth,
+  requireRole("admin"),
+  getExperienceAnalyticsController,
+);
+
+router.get(
   "/admin/key/:key",
   requireAuth,
   requireRole("admin"),
@@ -76,5 +85,8 @@ router.delete(
   requireRole("admin"),
   deleteExperienceController,
 );
+
+router.post("/public/impression", recordImpressionController);
+
 
 export default router;

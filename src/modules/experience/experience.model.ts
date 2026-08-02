@@ -1,31 +1,30 @@
 import mongoose, { Schema } from "mongoose";
 import { IExperience } from "./experience.interface";
 
-const ExperienceModuleSchema = new Schema(
+// ── Content sub‑schema ──────────────────────────────────
+const ContentSchema = new Schema(
   {
-    type: {
+    resourceType: {
       type: String,
-      enum: ["form", "action", "automation", "tracking"],
+      enum: ["form", "page"],
       required: true,
     },
-
-    key: {
+    resourceId: {
+      type: Schema.Types.ObjectId,
+    },
+    resourceKey: {
       type: String,
-      required: true,
       trim: true,
     },
-
-    config: {
-      type: Schema.Types.Mixed,
-      default: {},
+    titleOverride: {
+      type: String,
+      trim: true,
     },
   },
-  {
-    _id: false,
-    minimize: false,
-  },
+  { _id: false }
 );
 
+// ── Main Experience Schema ──────────────────────────────
 const ExperienceSchema = new Schema<IExperience>(
   {
     key: {
@@ -35,88 +34,56 @@ const ExperienceSchema = new Schema<IExperience>(
       trim: true,
       index: true,
     },
-
     name: {
       type: String,
       required: true,
       trim: true,
     },
-
     type: {
       type: String,
       enum: ["full_page", "popup", "banner", "redirect"],
       required: true,
       index: true,
     },
-
-    componentKey: {
-      type: String,
-      required: true,
-      trim: true,
-      index: true,
-    },
-
     enabled: {
       type: Boolean,
       default: false,
       index: true,
     },
-
     priority: {
       type: Number,
       default: 0,
       index: true,
     },
-
     target: {
       scope: {
         type: String,
         enum: ["global", "routes"],
         required: true,
       },
-
-      routes: [
-        {
-          type: String,
-          trim: true,
-        },
-      ],
-
-      excludeRoutes: [
-        {
-          type: String,
-          trim: true,
-        },
-      ],
+      routes: [{ type: String, trim: true }],
+      excludeRoutes: [{ type: String, trim: true }],
     },
-
     trigger: {
       type: {
         type: String,
         enum: ["always", "timer", "exit_intent", "scroll", "custom_event"],
         default: "always",
       },
-
-      value: {
-        type: Schema.Types.Mixed,
-      },
+      value: Schema.Types.Mixed,
     },
-
     schedule: {
-      startAt: {
-        type: Date,
-      },
-
-      endAt: {
-        type: Date,
-      },
+      startAt: Date,
+      endAt: Date,
     },
-
-    modules: {
-      type: [ExperienceModuleSchema],
-      default: [],
+    content: {
+      type: ContentSchema,
+      default: undefined,
     },
-
+    options: {
+      type: Schema.Types.Mixed,
+      default: {},
+    },
     payload: {
       type: Schema.Types.Mixed,
       default: {},
@@ -125,23 +92,13 @@ const ExperienceSchema = new Schema<IExperience>(
   {
     timestamps: true,
     versionKey: false,
-  },
+  }
 );
 
-ExperienceSchema.index({
-  enabled: 1,
-  type: 1,
-  priority: -1,
-});
+// ── Indexes ──────────────────────────────────────────────
+ExperienceSchema.index({ enabled: 1, type: 1, priority: -1 });
 
-ExperienceSchema.index({
-  componentKey: 1,
-});
-
-ExperienceSchema.index({
-  "modules.key": 1,
-});
-
+// ── Pre‑save validation ─────────────────────────────────
 ExperienceSchema.pre("save", function (next) {
   if (
     this.schedule?.startAt &&
@@ -150,21 +107,8 @@ ExperienceSchema.pre("save", function (next) {
   ) {
     return next(new Error("schedule.startAt cannot be greater than endAt"));
   }
-
-  if (this.modules?.length) {
-    for (const module of this.modules) {
-      if (!module.type || !module.key) {
-        return next(new Error("Each experience module must have type and key"));
-      }
-    }
-  }
-
   next();
 });
 
-const ExperienceModel = mongoose.model<IExperience>(
-  "Experience",
-  ExperienceSchema,
-);
-
+const ExperienceModel = mongoose.model<IExperience>("Experience", ExperienceSchema);
 export default ExperienceModel;

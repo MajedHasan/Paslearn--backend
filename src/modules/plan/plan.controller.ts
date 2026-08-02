@@ -83,7 +83,7 @@ export async function togglePlanActiveController(req: Request, res: Response, ne
     const plan = await togglePlanActive(req.params.id);
     return res.status(200).json({
       success: true,
-      message: `Plan ${plan.isActive ? "activated" : "deactivated"}`,
+      message: `Plan ${plan!.isActive ? "activated" : "deactivated"}`,
       data: plan,
     });
   } catch (error) {

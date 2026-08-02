@@ -14,6 +14,8 @@ import submissionRoutes from "../modules/forms/submission/submission.routes";
 import planRoutes from "../modules/plan/plan.routes";
 import planFeatureRoutes from "../modules/planFeature/planFeature.routes";
 import subscriptionRoutes from "../modules/subscription/subscription.routes";
+import automationRoutes from "../modules/forms/automation/automation.routes";
+import bookingRoutes from "../modules/forms/booking/booking.routes";
 
 // Theme, Theme Category, Page Template, and Module Preset routes
 import themeRoutes from "../modules/theme/theme.routes";
@@ -54,6 +56,14 @@ const routes = [
   {
     path: "/submissions",
     route: submissionRoutes,
+  },
+  {
+    path: "/automations",
+    route: automationRoutes,
+  },
+  {
+    path: "/bookings",
+    route: bookingRoutes,
   },
   {
     path: "/plans",
