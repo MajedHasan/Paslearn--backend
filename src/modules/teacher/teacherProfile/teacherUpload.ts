@@ -2,11 +2,26 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 
-const UPLOAD_DIR = path.join(__dirname, "../../../../public/uploads/teachers");
-
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+// Determine a safe upload directory
+function resolveUploadDir(): string {
+  // Try the normal relative path first
+  try {
+    const dir = path.resolve(__dirname, "../../../../public/uploads/teachers");
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    return dir;
+  } catch {
+    // Vercel / serverless fallback – /tmp is always writable
+    const dir = path.join("/tmp", "uploads", "teachers");
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    return dir;
+  }
 }
+
+const UPLOAD_DIR = resolveUploadDir();
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
