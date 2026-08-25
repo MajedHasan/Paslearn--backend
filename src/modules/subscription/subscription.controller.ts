@@ -11,7 +11,7 @@ import {
 
 export async function createSubscriptionController(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user._id;
+    const userId = (req as any).user.sub;
     const { planId, billingCycle, startDate, endDate } = req.body;
     const subscription = await createSubscription(
       userId,

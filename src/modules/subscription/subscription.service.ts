@@ -32,6 +32,7 @@ export async function createSubscription(
     billingCycle,
     startDate: startDate || new Date(),
     endDate: endDate || undefined,
+    autoRenew: true,   // <-- add this line
   });
 }
 
