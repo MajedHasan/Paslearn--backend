@@ -26,6 +26,10 @@ import modulePresetRoutes from "../modules/theme/modulePreset/modulePreset.route
 // Teacher Profile routes
 import teacherProfileRoutes from "../modules/teacher/teacherProfile/teacherProfile.routes";
 
+// Course routes
+import courseRoutes from "../modules/course/course.routes";
+
+
 const router = Router();
 
 const routes = [
@@ -97,7 +101,12 @@ const routes = [
   , {
     path: "/teacher-profile",
     route: teacherProfileRoutes,
-  }
+  },
+  // Course routes
+  {
+    path: "/courses",
+    route: courseRoutes,
+  },
 ];
 
 routes.forEach((item) => {
