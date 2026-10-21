@@ -25,6 +25,22 @@ export const courseController = {
     }
   },
 
+  // Override get to normalize populate
+  async get(req: Request, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id;
+      let populate: string | string[] | undefined = req.query.populate as any;
+      if (typeof populate === "string") {
+        populate = populate.includes(",") ? populate.split(",").map((p) => p.trim()) : populate;
+      }
+      const doc = await courseService.getById(id, { populate });
+      if (!doc) return res.status(404).json({ success: false, message: "Course not found" });
+      res.json({ success: true, data: doc });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async create(req: Request, res: Response, next: NextFunction) {
     try {
       const validation = await courseService.validatePricing(req.body);
@@ -60,6 +76,44 @@ export const courseController = {
       const userId = (req as any).user._id || (req as any).user.sub;
       const stats = await courseService.getStatsForTeacher(userId);
       res.json({ success: true, data: stats });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  // Duplicate course
+  async duplicate(req: Request, res: Response, next: NextFunction) {
+    try {
+      const original = await courseService.getById(req.params.id, { populate: [] });
+      if (!original) return res.status(404).json({ success: false, message: "Course not found" });
+
+      // Remove id and timestamps, modify title
+      const copy: any = { ...original };
+      delete copy._id;
+      delete copy.createdAt;
+      delete copy.updatedAt;
+      copy.title = `${original.title} (Copy)`;
+      copy.status = "draft";
+      copy.slug = `${original.slug}-copy-${Date.now()}`;
+
+      const doc = await courseService.create(copy, {
+        userId: (req as any).user._id || (req as any).user.sub,
+      });
+      res.status(201).json({ success: true, data: doc });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+    // Bulk delete
+  async bulkDelete(req: Request, res: Response, next: NextFunction) {
+    try {
+      const ids: string[] = req.body.ids || [];
+      if (ids.length === 0) {
+        return res.status(400).json({ success: false, message: "No IDs provided" });
+      }
+      const result = await courseService.bulkDelete({ _id: { $in: ids } } as any);
+      res.json({ success: true, data: result });
     } catch (err) {
       next(err);
     }

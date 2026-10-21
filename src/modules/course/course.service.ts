@@ -7,14 +7,12 @@ import { ICourse } from "./course.interface";
 import slugify from "slugify";
 import { Types } from "mongoose";
 
-// Base CRUD service with hooks
 export const courseCrudService = createCrudService(CourseModel, {
   searchFields: ["title", "description"],
   softDeleteField: "deletedAt",
   allowedPopulate: ["thumbnailMediaId", "teacher", "prerequisites"],
   allowedFilterFields: ["teacher", "category", "difficulty", "status", "priceModel", "courseLevel"],
   defaultSort: "-createdAt",
-  // Hook to set teacher and slug before creating
   beforeCreate: (payload: any, context: any) => {
     if (!payload.teacher && context?.userId) {
       payload.teacher = context.userId;
@@ -24,7 +22,6 @@ export const courseCrudService = createCrudService(CourseModel, {
     }
     return payload;
   },
-  // Hook to ensure slug is set on update if missing
   beforeUpdate: async (id: string, payload: any, context: any) => {
     if (!payload.slug && payload.title) {
       payload.slug = slugify(payload.title, { lower: true, strict: true }) || `course-${Date.now()}`;
@@ -33,11 +30,9 @@ export const courseCrudService = createCrudService(CourseModel, {
   },
 });
 
-// Course service with custom methods
 export const courseService = {
   ...courseCrudService,
 
-  // Override list to always filter by teacher and populate thumbnail and teacher
   async list({
     userId,
     filter = {},
@@ -48,12 +43,8 @@ export const courseService = {
     searchFields = ["title", "description"],
     populate,
   }: any) {
-    // Ensure teacher filter
     filter.teacher = userId;
-
-    // Default populate if not provided
     const finalPopulate = populate || ["thumbnailMediaId", "teacher"];
-
     return courseCrudService.list({
       filter,
       page,
@@ -65,7 +56,6 @@ export const courseService = {
     });
   },
 
-  // Get aggregated stats for teacher dashboard
   async getStatsForTeacher(userId: string) {
     const match = {
       teacher: new Types.ObjectId(userId),
@@ -108,7 +98,6 @@ export const courseService = {
     };
   },
 
-  // Validate pricing structure based on priceModel
   async validatePricing(course: Partial<ICourse>) {
     if (!course.priceModel) return { valid: false, message: "Price model required" };
 
@@ -139,7 +128,6 @@ export const courseService = {
     }
   },
 
-  // Upload course thumbnail
   async uploadThumbnail(courseId: string, file: Express.Multer.File) {
     const course = await CourseModel.findById(courseId);
     if (!course) throw new Error("Course not found");
@@ -158,7 +146,6 @@ export const courseService = {
     return media;
   },
 
-  // Upload video for a lesson
   async uploadLessonVideo(
     courseId: string,
     sectionId: string,
@@ -187,7 +174,6 @@ export const courseService = {
     return media;
   },
 
-  // Upload file for a lesson
   async uploadLessonFile(
     courseId: string,
     sectionId: string,
@@ -216,7 +202,6 @@ export const courseService = {
     return media;
   },
 
-  // Start transcoding for an uploaded video
   async transcodeLessonVideo(courseId: string, sectionId: string, lessonId: string) {
     const course = await CourseModel.findById(courseId);
     if (!course) throw new Error("Course not found");

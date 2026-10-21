@@ -1,4 +1,3 @@
-// src/modules/course/course.routes.ts
 import { Router } from "express";
 import { courseController } from "./course.controller";
 import { requireAuth } from "../../middlewares/auth.middleware";
@@ -8,15 +7,19 @@ const router = Router();
 
 router.use(requireAuth);
 
-// Stats must come before /:id to avoid conflict
+// Stats
 router.get("/stats", courseController.stats);
 
-// Base CRUD (list, get, create, update, delete)
+// Base CRUD
 router.get("/", courseController.list);
 router.get("/:id", courseController.get);
 router.post("/", courseController.create);
 router.put("/:id", courseController.update);
 router.delete("/:id", courseController.delete);
+
+// Duplicate and bulk delete
+router.post("/:id/duplicate", courseController.duplicate);
+router.post("/bulk-delete", courseController.bulkDelete);
 
 // Thumbnail upload
 router.post("/:id/thumbnail", uploadMiddleware.single("file"), courseController.uploadThumbnail);
