@@ -3,6 +3,10 @@ import { Request, Response, NextFunction } from "express";
 import { createCrudController } from "../cruds/crud.controller";
 import { courseService } from "./course.service";
 import { parseListQuery } from "../cruds/utils.query";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { R2_BUCKET_NAME, r2Client } from "../../config/r2Client";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+import mediaModel from "../media/media.model";
 
 const baseController = createCrudController(courseService);
 
@@ -19,6 +23,23 @@ export const courseController = {
         userId: (req as any).user._id || (req as any).user.sub,
         searchFields: ["title", "description"],
       });
+
+      // Find the thumbnail key from the thumbnailMediaId and get the signed URL for the thumbnail
+      for (const course of result.data) {
+        if (course.thumbnailMediaId && course.thumbnailMediaId.key) {
+          try {
+            const command = new GetObjectCommand({
+              Bucket: R2_BUCKET_NAME,
+              Key: course.thumbnailMediaId.key,
+            });
+            const signedUrl = await getSignedUrl(r2Client, command, { expiresIn: 3600 });
+            course.thumbnailMediaId.url = signedUrl;
+          } catch (err) {
+            console.error(`Error generating signed URL for thumbnail ${course.thumbnailMediaId._id}:`, err);
+          }
+        }
+      } 
+
       res.json({ success: true, ...result });
     } catch (err) {
       next(err);
@@ -35,6 +56,48 @@ export const courseController = {
       }
       const doc = await courseService.getById(id, { populate });
       if (!doc) return res.status(404).json({ success: false, message: "Course not found" });
+
+
+      // Find the Video Lessions and then get the signed URL for each lesson video
+      for (const section of doc.sections || []) {
+        for (const lesson of section.lessons || []) {
+          if (lesson.type === "video" && lesson.content.videoMediaId) {
+            try {
+
+              const media = await mediaModel.findById(lesson.content.videoMediaId);
+              if (!media) {
+                console.error(`Media not found for lesson ${lesson._id} with key ${lesson.content.videoUrl}`);
+                continue;
+              }
+
+              const command = new GetObjectCommand({
+                Bucket: R2_BUCKET_NAME,
+                Key: media?.key as string,
+              });
+              const signedUrl = await getSignedUrl(r2Client, command, { expiresIn: 3600 });
+              lesson.content.videoUrl = signedUrl;
+            } catch (err) {
+              console.error(`Error generating signed URL for lesson ${lesson._id}:`, err);
+            }
+          }
+        }
+      } 
+
+      // Find the thumbnail key from the thumbnailMediaId and get the signed URL for the thumbnail
+      if (doc.thumbnailMediaId && doc.thumbnailMediaId.key) {
+        try {
+          const command = new GetObjectCommand({
+            Bucket: R2_BUCKET_NAME,
+            Key: doc.thumbnailMediaId.key,
+          });
+          const signedUrl = await getSignedUrl(r2Client, command, { expiresIn: 3600 });
+          doc.thumbnailMediaId.url = signedUrl;
+        } catch (err) {
+          console.error(`Error generating signed URL for thumbnail ${doc.thumbnailMediaId._id}:`, err);
+        }
+      }
+
+
       res.json({ success: true, data: doc });
     } catch (err) {
       next(err);

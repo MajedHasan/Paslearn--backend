@@ -35,7 +35,7 @@ export const courseService = {
 
   async list({
     userId,
-    filter = {},
+    filter = {softDeleteField: { $exists: false }},
     page = 1,
     limit = 10,
     sort = "-createdAt",
