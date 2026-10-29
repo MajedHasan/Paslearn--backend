@@ -33,6 +33,15 @@
 // ------------------ For Serverless Server (Like Vercel) ------------------
 import app from "./app";
 import logger from "./utils/logger";
+import { cronService } from "./modules/cron/cron.service";
+
+// ⭐ Register all cron jobs before starting.
+// Each job self-registers when its file is imported.
+import "./modules/cron/jobs/courseRetentionCleanup.job";
+// When you add more jobs later, just import them here:
+// import "./modules/cron/jobs/aiBatchJob.job";
+// import "./modules/cron/jobs/emailDigest.job";
+
 
 const port = process.env.PORT || 5001;
 
@@ -40,8 +49,14 @@ const server = app.listen(port, () => {
   logger.info(`Server running on port ${port}`);
 });
 
+
+// start the scheduler
+cronService.startAll();
+
 process.on("SIGTERM", () => {
   logger.info("SIGTERM received");
+
+  cronService.stopAll();
 
   server.close(() => {
     logger.info("Server closed");

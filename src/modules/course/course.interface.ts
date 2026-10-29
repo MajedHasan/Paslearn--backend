@@ -1,66 +1,58 @@
 // src/modules/course/course.interface.ts
 import { Document, Types } from "mongoose";
 
-export type LessonType = "video" | "text" | "quiz" | "assignment" | "file";
-export type QuestionType = "multiple_choice" | "true_false" | "short_answer";
+export type LessonType = "video" | "text" | "quiz" | "exam" | "assignment" | "file";
 export type CourseStatus = "draft" | "published" | "archived" | "under_review";
 export type PriceModel = "free" | "onetime" | "subscription";
 export type SubscriptionInterval = "weekly" | "monthly" | "yearly";
-export type CompletionCriteria = "watch_all" | "pass_quiz" | "manual";
+export type CompletionCriteria = "watch_all" | "pass_quiz" | "pass_exam" | "manual";
 export type Difficulty = "beginner" | "intermediate" | "advanced";
 export type CourseLevel = "all" | "beginner" | "intermediate" | "advanced";
 
-export interface IQuestion {
-  id: string;
-  type: QuestionType;
-  prompt: string;
-  options?: string[];
-  correctAnswer?: string;
-  points: number;
-  explanation?: string;   // optional answer explanation
-}
-
 export interface ILessonContent {
-  videoUrl?: string;      // URL or media ID
-  videoEmbed?: string;
+  videoMediaId?: Types.ObjectId | string | null;
+  fileMediaId?: Types.ObjectId | string | null;
   textContent?: string;
-  quizQuestions?: IQuestion[];
   assignmentInstructions?: string;
-  fileUrl?: string;
-  videoMediaId?: string;  // reference to Media collection
-  fileMediaId?: string;
+  transcriptKey?: string;
+  // read-time enrichment:
+  videoMediaName?: string;
+  fileMediaName?: string;
 }
 
 export interface ILesson {
   id: string;
+  order: number;
   title: string;
   type: LessonType;
-  duration?: number;        // in minutes
+  duration?: number;       // minutes
   freePreview: boolean;
   dripDays: number;
+  quizId?: Types.ObjectId;
   content: ILessonContent;
 }
 
 export interface ISection {
   id: string;
+  order: number;
   title: string;
-  description?: string;    // optional section description
+  description?: string;
   lessons: ILesson[];
 }
 
 export interface IOneTimePricing {
   price: number;
   currency: string;
-  discountPercent?: number;      // optional sale discount
-  originalPrice?: number;        // if discounted, original price
+  discountPercent?: number;
+  originalPrice?: number;
 }
 
 export interface ISubscriptionTier {
   id: string;
   interval: SubscriptionInterval;
-  price: number;                // final price after discount
-  originalPrice?: number;       // base price before discount
-  discountPercent?: number;     // discount percentage from originalPrice
+  price: number;
+  originalPrice?: number;
+  discountPercent?: number;
   isActive: boolean;
 }
 
@@ -74,7 +66,7 @@ export interface ICourse extends Document {
   difficulty: Difficulty;
   language: string;
   thumbnailMediaId?: Types.ObjectId;
-  promoVideo?: string;
+  promoVideoMediaId?: Types.ObjectId;
   badge?: string;
   slug: string;
   seoTitle?: string;
@@ -86,19 +78,43 @@ export interface ICourse extends Document {
   priceModel: PriceModel;
   oneTimePricing?: IOneTimePricing;
   subscriptionTiers?: ISubscriptionTier[];
-  discountPercent: number;          // legacy global discount (deprecated)
-  couponCode?: string;
-  enrollmentLimit: number;
-  prerequisites: Types.ObjectId[];  // reference to other courses
+  enrollmentLimit: number;         // 0 = unlimited
+  enrollmentsPaused: boolean;
+  enrollmentsOpenAt?: Date;
+  prerequisites: Types.ObjectId[];
   certificateEnabled: boolean;
+  certificateAutoIssue: boolean;
   certificateTemplate: string;
   completionCriteria: CompletionCriteria;
-  accessDuration: number;
+  accessDuration: number;          // days; 0 = lifetime
   instructorBio?: string;
   integrations: string[];
   courseLevel: CourseLevel;
-  status: CourseStatus;             // draft, published, archived, under_review
+  status: CourseStatus;
   teacher: Types.ObjectId;
+
+  // Denormalized counters (maintained by hooks & events)
+  publishedAt?: Date | null;
+  sectionsCount: number;
+  lessonsCount: number;
+  totalDurationSec: number;
+  enrollmentCount: number;
+  ratingAvg: number;
+  ratingCount: number;
+  revenueCents: number;
+
+  // AI hooks
+  transcriptReady: boolean;
+  embeddingRef?: string;
+  aiSummary?: string;
+
+  // ── Deletion & retention ──
+  deletedAt?: Date | null;
+  mediaRetentionUntil?: Date | null;
+  deletedBy?: Types.ObjectId | null;
+  deletionReason?: string;
+  hardPurgedAt?: Date | null;
+
   createdAt: Date;
   updatedAt: Date;
 }

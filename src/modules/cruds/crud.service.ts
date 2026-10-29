@@ -49,8 +49,7 @@ export function createCrudService(
   ) {
     const query: any = { ...filter };
 
-    if (softDeleteField) {
-      // exclude soft-deleted by default
+    if (softDeleteField && query[softDeleteField] === undefined) {
       query[softDeleteField] = { $exists: false };
     }
 
