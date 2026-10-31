@@ -5,10 +5,10 @@ import { IProduct, ICommissionPolicy } from "./product.interface";
 import { Types } from "mongoose";
 
 const DEFAULT_COMMISSION: ICommissionPolicy = {
-  enabled: false,
+  enabled: true,
   type: "one_time",
   valueType: "percent",
-  value: 0,
+  value: 20,
   duration: "lifetime",
 };
 

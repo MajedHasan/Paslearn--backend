@@ -8,7 +8,8 @@ export interface IAffiliateProfile extends Document {
   payoutMethod?: "stripe" | "paypal" | "manual";
   payoutDetails?: Record<string, any>;
   totalEarned: number;
-  totalPending: number;
+  totalPending: number;       // in escrow
+  totalAvailable: number;     // ⭐ NEW — withdrawable now
   totalPaid: number;
   createdAt: Date;
   updatedAt: Date;
@@ -26,6 +27,7 @@ export interface ICommission extends Document {
   value: number;
   amount: number;
   currency: string;
+  holdUntil?: Date;              // ⭐ NEW — when it becomes approved
   periodStart?: Date;
   periodEnd?: Date | null;
   occurrenceNumber?: number;
@@ -33,4 +35,30 @@ export interface ICommission extends Document {
   status: "pending" | "approved" | "paid" | "reversed";
   paidAt?: Date;
   createdAt: Date;
+}
+
+export interface IPayoutMethodDetails {
+  // PayPal
+  paypalEmail?: string;
+  accountHolderName?: string;
+
+  // Bank
+  bankName?: string;
+  accountNumber?: string;   // IBAN or account number
+  country?: string;
+  swiftCode?: string;
+  additionalNote?: string;
+}
+
+export interface IPayout extends Document {
+  affiliate: Types.ObjectId;
+  method: "stripe" | "paypal" | "manual";
+  amount: number;
+  status: "requested" | "approved" | "paid" | "rejected";
+  reason?: string;
+  externalRef?: string;
+  methodDetails?: IPayoutMethodDetails;
+  processedAt?: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
 }

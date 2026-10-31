@@ -21,9 +21,18 @@ export const affiliateController = {
   },
   async requestPayout(req: Request, res: Response, next: NextFunction) {
     try {
-      const data = await affiliateDashboardService.requestPayout((req as any).user.sub, req.body);
+      const data = await affiliateDashboardService.requestPayout(
+        (req as any).user.sub,
+        {
+          method: req.body.method,
+          amount: req.body.amount,
+          methodDetails: req.body.methodDetails || {},
+        }
+      );
       res.status(201).json({ success: true, data });
-    } catch (err) { next(err); }
+    } catch (err) {
+      next(err);
+    }
   },
   async adminApprovePayout(req: Request, res: Response, next: NextFunction) {
     try {
@@ -33,4 +42,21 @@ export const affiliateController = {
       res.json({ success: true, data });
     } catch (err) { next(err); }
   },
+
+  async listPayouts(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = await affiliateDashboardService.listPayouts(
+        (req as any).user.sub,
+        {
+          status: req.query.status as string,
+          page: parseInt(req.query.page as string) || 1,
+          limit: parseInt(req.query.limit as string) || 20,
+        }
+      );
+      res.json({ success: true, ...data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
 };

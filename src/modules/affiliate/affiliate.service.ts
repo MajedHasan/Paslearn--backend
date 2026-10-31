@@ -27,6 +27,9 @@ export const affiliateService = {
 
     if (amount <= 0) return null;
 
+    const HOLD_DAYS = parseInt(process.env.AFFILIATE_HOLD_DAYS || "7");
+    const holdUntil = new Date(Date.now() + HOLD_DAYS * 86_400_000);
+
     const commission = await CommissionModel.create({
       affiliate: profile.user,
       affiliateCode: params.affiliateCode,
@@ -39,6 +42,7 @@ export const affiliateService = {
       value: params.policy.value,
       amount,
       currency: params.currency,
+      holdUntil,                              // ⭐ NEW
       periodStart: new Date(),
       occurrenceNumber: 1,
       isFinal: params.policy.type === "one_time" ||

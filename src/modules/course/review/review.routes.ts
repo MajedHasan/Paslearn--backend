@@ -9,7 +9,16 @@ const router = Router();
 router.get("/courses/:courseId/reviews", reviewController.listForCourse);
 
 router.use(requireAuth);
+
+// ⭐ Student — my reviews (must be BEFORE /:id routes)
+router.get("/my", reviewController.myList);
+
 router.post("/courses/:courseId/reviews", reviewController.create);
+
+// ⭐ Student — edit / delete own review
+router.patch("/:id", reviewController.updateMine);
+router.delete("/:id", reviewController.deleteMine);
+
 router.post("/reviews/:id/helpful", reviewController.markHelpful);
 router.post("/reviews/:id/flag", reviewController.flag);
 

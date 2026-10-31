@@ -58,4 +58,43 @@ export const reviewController = {
       res.json({ success: true, data });
     } catch (err) { next(err); }
   },
+
+  async myList(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = (req as any).user.sub;
+      const result = await reviewService.listMine(userId, {
+        page: parseInt(req.query.page as string) || 1,
+        limit: parseInt(req.query.limit as string) || 20,
+      });
+      res.json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async updateMine(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = (req as any).user.sub;
+      const { rating, title, comment } = req.body;
+      const review = await reviewService.updateMine(userId, req.params.id, {
+        rating,
+        title,
+        comment,
+      });
+      res.json({ success: true, data: review });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async deleteMine(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = (req as any).user.sub;
+      const result = await reviewService.deleteMine(userId, req.params.id);
+      res.json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
 };

@@ -9,6 +9,7 @@ const profileSchema = new Schema<IAffiliateProfile>({
   payoutDetails: { type: Schema.Types.Mixed },
   totalEarned: { type: Number, default: 0 },
   totalPending: { type: Number, default: 0 },
+  totalAvailable: { type: Number, default: 0 },   // ⭐ NEW
   totalPaid: { type: Number, default: 0 },
 }, { timestamps: true });
 
@@ -24,6 +25,7 @@ const commissionSchema = new Schema<ICommission>({
   value: { type: Number, required: true },
   amount: { type: Number, required: true },
   currency: { type: String, required: true },
+  holdUntil: { type: Date, index: true },   // ⭐ NEW
   periodStart: Date,
   periodEnd: { type: Date, default: null },
   occurrenceNumber: { type: Number, default: 1 },

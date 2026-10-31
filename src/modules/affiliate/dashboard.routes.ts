@@ -11,6 +11,7 @@ router.use(requireAuth);
 router.get("/overview", affiliateController.overview);
 router.get("/referrals", affiliateController.referrals);
 router.post("/payouts", affiliateController.requestPayout);
+router.get("/payouts", affiliateController.listPayouts);
 
 export default router;
 
