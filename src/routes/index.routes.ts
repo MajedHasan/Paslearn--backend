@@ -25,7 +25,7 @@ import cartRoutes from "../modules/cart/cart.routes";
 import orderRoutes, { adminOrderRoutes } from "../modules/order/order.routes";
 import couponRoutes, { couponValidationRouter } from "../modules/coupon/coupon.routes";
 import entitlementRoutes, { adminEntitlementRoutes } from "../modules/entitlement/entitlement.routes";
-import webhookRoutes from "../modules/payments/webhook.routes";
+// import webhookRoutes from "../modules/payments/webhook.routes";
 import productRoutes, { adminProductRoutes } from "../modules/product/product.routes";
 import affiliateRoutes, { adminAffiliateRoutes } from "../modules/affiliate/dashboard.routes";
 
@@ -78,7 +78,7 @@ const routes = [
   // ═══════════════════════════════════════════════════
   // Webhooks — MUST use raw-body middleware
   // ═══════════════════════════════════════════════════
-  { path: "/webhooks", route: webhookRoutes },
+  // { path: "/webhooks", route: webhookRoutes },
 
   // ═══════════════════════════════════════════════════
   // Public

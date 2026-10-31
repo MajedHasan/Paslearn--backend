@@ -152,4 +152,27 @@ export class StripeProvider implements PaymentProvider {
         return { eventType: "ignored", raw: event };
     }
   }
+
+  async retrievePaymentStatus(
+    providerRef: string
+  ): Promise<"succeeded" | "pending" | "failed" | "unknown"> {
+    try {
+      const intent = await getStripe().paymentIntents.retrieve(providerRef);
+      if (intent.status === "succeeded") return "succeeded";
+      if (
+        intent.status === "processing" ||
+        intent.status === "requires_action" ||
+        intent.status === "requires_confirmation"
+      ) return "pending";
+      if (
+        intent.status === "canceled" ||
+        intent.status === "requires_payment_method"
+      ) return "failed";
+      return "unknown";
+    } catch (err: any) {
+      console.error("[stripe.retrievePaymentStatus]", err?.message);
+      return "unknown";
+    }
+  }
+
 }

@@ -8,10 +8,11 @@ router.use(requireAuth);
 
 router.get("/preview", orderController.preview);
 router.post("/", orderController.create);
-router.get("/", orderController.list);
-router.get("/:id", orderController.get);
 router.post("/:id/pay", orderController.pay);
 router.post("/:id/cancel", orderController.cancel);
+router.post("/:id/verify", orderController.verify);
+router.get("/:id", orderController.get);
+router.get("/", orderController.list);
 
 export default router;
 

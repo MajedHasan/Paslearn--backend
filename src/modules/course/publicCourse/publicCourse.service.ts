@@ -255,7 +255,7 @@ export const publicCourseService = {
       let quizInfo: any = null;
       if (targetLesson.quizId) {
         try {
-          const { default: QuizModel } = await import("../quiz/quiz.model");
+          const { QuizModel } = await import("../quiz/quiz.model");
           const quiz: any = await QuizModel.findById(targetLesson.quizId).lean();
           if (quiz) {
             quizInfo = {

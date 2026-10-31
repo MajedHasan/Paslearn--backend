@@ -140,4 +140,26 @@ export class PayPalProvider implements PaymentProvider {
 
     return { eventType: "ignored", raw: body };
   }
+
+  async retrievePaymentStatus(
+    providerRef: string
+  ): Promise<"succeeded" | "pending" | "failed" | "unknown"> {
+    try {
+      const token = await getAccessToken();
+      const { data } = await axios.get(
+        `${PAYPAL_API}/v2/checkout/orders/${providerRef}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (data.status === "COMPLETED") return "succeeded";
+      if (
+        data.status === "APPROVED" ||
+        data.status === "CREATED" ||
+        data.status === "PAYER_ACTION_REQUIRED"
+      ) return "pending";
+      if (data.status === "VOIDED") return "failed";
+      return "unknown";
+    } catch {
+      return "unknown";
+    }
+  }
 }

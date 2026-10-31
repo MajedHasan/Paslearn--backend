@@ -10,6 +10,7 @@ import logger from "./utils/logger";
 import { connectDB } from "./lib/db";
 
 import routes from "./routes/index.routes";
+import webhookRoutes from "./modules/payments/webhook.routes";
 
 const app = express();
 
@@ -33,6 +34,11 @@ app.use(
     credentials: true, // allow cookies/authorization headers
   }),
 );
+
+
+// ⭐⭐⭐ WEBHOOKS FIRST — raw body, BEFORE express.json()
+app.use("/api/webhooks", webhookRoutes);
+
 app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

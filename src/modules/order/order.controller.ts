@@ -93,4 +93,14 @@ export const orderController = {
       res.json({ success: true, data: refunded });
     } catch (err) { next(err); }
   },
+
+  async verify(req: Request, res: Response, next: NextFunction) {
+    try {
+      const order = await orderService.verifyPayment(req.params.id);
+      res.json({ success: true, data: order });
+    } catch (err) {
+      next(err);
+    }
+  },
+
 };

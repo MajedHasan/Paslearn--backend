@@ -36,4 +36,5 @@ export interface PaymentProvider {
   createSubscription(input: PaymentAdapterInput): Promise<PaymentResult>;
   refund(paymentRef: string, amount: number): Promise<{ refundRef: string; status: string }>;
   verifyWebhook(headers: Record<string, any>, rawBody: Buffer | string): Promise<ParsedPaymentEvent>;
+  retrievePaymentStatus( providerRef: string ): Promise<"succeeded" | "pending" | "failed" | "unknown">;
 }
