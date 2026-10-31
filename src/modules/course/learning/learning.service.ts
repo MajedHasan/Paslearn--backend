@@ -8,6 +8,9 @@ import { getStorageDriver } from "../../../storage/storage.factory";
 import { AppError } from "../../../utils/appError";
 import { Types } from "mongoose";
 import { enrollmentService } from "../enrollment/enrollment.service";
+import CertificateModel from "../certificate/certificate.model";
+import ReviewModel from "../review/review.model";
+import { QuizModel } from "../quiz/quiz.model";
 
 const PLAYBACK_TTL_SEC = 900; // 15 min
 const PREVIEW_TTL_SEC = 900;
@@ -39,43 +42,86 @@ export const learningService = {
    * Full lesson URLs are NEVER emitted here.
    */
   async getLearningView(userId: string, courseSlug: string) {
-    const course = await CourseModel.findOne({
+    const course: any = await CourseModel.findOne({
       slug: courseSlug,
       status: "published",
       deletedAt: null,
     })
       .populate("thumbnailMediaId")
+      .populate("teacher", "name profileImageUrl")
       .lean();
 
     if (!course) throw new AppError("Course not found", 404);
 
-    // Check entitlement (owner also has access)
-    const isOwner = String((course as any).teacher) === userId;
+    const isOwner = String(course.teacher?._id ?? course.teacher) === userId;
     const ent = isOwner
       ? { source: "owner" }
-      : await entitlementService.checkByRef(userId, "course", (course as any)._id);
+      : await entitlementService.checkByRef(userId, "course", course._id);
 
     if (!ent) throw new AppError("Not enrolled in this course", 403);
 
-    const enrollment = await EnrollmentModel.findOne({
-      user: userId,
-      course: (course as any)._id,
-    }).lean();
+    const [enrollment, progressRows, existingCertificate, existingReview] =
+      await Promise.all([
+        EnrollmentModel.findOne({ user: userId, course: course._id }).lean(),
+        progressService.getForCourse(userId, String(course._id)),
+        CertificateModel.findOne({ user: userId, course: course._id }).lean(),
+        ReviewModel.findOne({ user: userId, course: course._id }).lean(),
+      ]);
 
-    const progressRows = await progressService.getForCourse(userId, String((course as any)._id));
-    const progressMap = new Map(progressRows.map((p: any) => [p.lessonId, p]));
+    const progressMap = new Map(
+      progressRows.map((p: any) => [p.lessonId, p])
+    );
 
-    // Build view — strip media IDs, only emit signed URLs for preview OR fully unlocked lessons
     const sections = await Promise.all(
-      (course.sections || []).map(async (section: any) => ({
+      (course.sections || []).map(async (section: any, si: number) => ({
         id: section.id,
-        order: section.order,
+        order: section.order ?? si,
         title: section.title,
         description: section.description,
         lessons: await Promise.all(
           (section.lessons || []).map(async (lesson: any) => {
             const dripLocked = await isDripLocked(enrollment, lesson);
-            const canPlay = !dripLocked && (ent.source === "owner" || ent);
+            const canPlay = !dripLocked && (ent.source === "owner" || !!ent);
+
+            // ── Drip unlock date ──
+            let unlocksAt: Date | null = null;
+            if (lesson.dripDays > 0 && (enrollment as any)?.enrolledAt) {
+              unlocksAt = new Date(
+                new Date((enrollment as any).enrolledAt).getTime() +
+                  lesson.dripDays * 86_400_000
+              );
+            }
+
+            // ⭐ QUIZ RESOLUTION — the fix
+            let resolvedQuizId: string | null = lesson.quizId
+              ? String(lesson.quizId)
+              : null;
+
+            if (
+              !resolvedQuizId &&
+              (lesson.type === "quiz" || lesson.type === "exam")
+            ) {
+              try {
+                const quizFilter: any = {
+                  course: course._id,
+                  lessonId: lesson.id,
+                  deletedAt: null,
+                };
+                // Only require published for non-owners
+                if (!isOwner) quizFilter.isPublished = true;
+
+                const q = await QuizModel.findOne(quizFilter)
+                  .select("_id")
+                  .sort({ createdAt: -1 })
+                  .lean();
+                if (q) resolvedQuizId = String((q as any)._id);
+              } catch (err: any) {
+                console.error(
+                  `[getLearningView] quiz lookup failed for lesson ${lesson.id}:`,
+                  err?.message
+                );
+              }
+            }
 
             return {
               id: lesson.id,
@@ -85,41 +131,89 @@ export const learningService = {
               duration: lesson.duration,
               freePreview: lesson.freePreview,
               dripDays: lesson.dripDays,
+              quizId: resolvedQuizId, // ⭐ populated via fallback
               locked: !canPlay && !lesson.freePreview,
               dripLocked,
-              // for text & assignment lessons, send content inline (they need it)
+              unlocksAt: dripLocked ? unlocksAt : null,
               textContent:
                 lesson.type === "text" && (canPlay || lesson.freePreview)
                   ? lesson.content?.textContent
                   : undefined,
               assignmentInstructions:
-                lesson.type === "assignment" && (canPlay || lesson.freePreview)
+                lesson.type === "assignment" &&
+                (canPlay || lesson.freePreview)
                   ? lesson.content?.assignmentInstructions
                   : undefined,
               progress: progressMap.get(lesson.id) || null,
-              // NO videoMediaId / fileMediaId exposed
             };
           })
         ),
       }))
     );
 
+    const progressPercent = (enrollment as any)?.progressPercent ?? 0;
+    const isComplete = progressPercent >= 100;
+    const courseCompletedCriteria =
+      course.completionCriteria === "manual"
+        ? (enrollment as any)?.completedAt != null
+        : isComplete;
+
+    const certificateIssued =
+      !!existingCertificate && !(existingCertificate as any).revokedAt;
+
     return {
       course: {
-        _id: (course as any)._id,
-        title: (course as any).title,
-        slug: (course as any).slug,
-        subtitle: (course as any).subtitle,
-        thumbnailUrl: await signMedia((course as any).thumbnailMediaId?._id),
-        sectionsCount: (course as any).sectionsCount,
-        lessonsCount: (course as any).lessonsCount,
-        totalDurationSec: (course as any).totalDurationSec,
-        certificateEnabled: (course as any).certificateEnabled,
+        _id: course._id,
+        title: course.title,
+        slug: course.slug,
+        subtitle: course.subtitle,
+        thumbnailUrl: await signMedia(course.thumbnailMediaId?._id),
+        sectionsCount: course.sectionsCount,
+        lessonsCount: course.lessonsCount,
+        totalDurationSec: course.totalDurationSec,
+        certificateEnabled: course.certificateEnabled,
+        certificateAutoIssue: course.certificateAutoIssue,
+        completionCriteria: course.completionCriteria,
+        category: course.category,
+        difficulty: course.difficulty,
+        ratingAvg: course.ratingAvg,
+        ratingCount: course.ratingCount,
+        teacher: course.teacher
+          ? {
+              _id: course.teacher._id,
+              name: course.teacher.name,
+              profileImageUrl: course.teacher.profileImageUrl,
+            }
+          : null,
       },
       enrollment: {
-        progressPercent: enrollment?.progressPercent ?? 0,
-        lessonsCompleted: enrollment?.lessonsCompleted ?? 0,
-        completedAt: enrollment?.completedAt ?? null,
+        progressPercent,
+        lessonsCompleted: (enrollment as any)?.lessonsCompleted ?? 0,
+        completedAt: (enrollment as any)?.completedAt ?? null,
+        enrolledAt: (enrollment as any)?.enrolledAt ?? null,
+      },
+      certificate: {
+        issued: certificateIssued,
+        canClaim:
+          courseCompletedCriteria &&
+          course.certificateEnabled &&
+          !certificateIssued &&
+          !isOwner,
+        certificateId: existingCertificate
+          ? String((existingCertificate as any)._id)
+          : null,
+        certificateNumber:
+          (existingCertificate as any)?.certificateNumber || null,
+        verificationSlug:
+          (existingCertificate as any)?.verificationSlug || null,
+        issuedAt: (existingCertificate as any)?.issuedAt || null,
+      },
+      review: {
+        exists: !!existingReview,
+        canReview: courseCompletedCriteria && !existingReview && !isOwner,
+        rating: (existingReview as any)?.rating || null,
+        title: (existingReview as any)?.title || null,
+        comment: (existingReview as any)?.comment || null,
       },
       sections,
     };

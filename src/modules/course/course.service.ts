@@ -119,17 +119,24 @@ export const courseCrudService = createCrudService(CourseModel, {
           const existingContent = existingLesson?.content || {};
           const newContent = newLesson.content || {};
 
-          return {
-            ...newLesson,
-            content: {
-              videoMediaId: newContent.videoMediaId || existingContent.videoMediaId || null,
-              fileMediaId: newContent.fileMediaId || existingContent.fileMediaId || null,
-              textContent: newContent.textContent ?? existingContent.textContent ?? "",
-              assignmentInstructions:
-                newContent.assignmentInstructions ?? existingContent.assignmentInstructions ?? "",
-              transcriptKey: newContent.transcriptKey || existingContent.transcriptKey,
-            },
+          const merged: any = { ...newLesson };
+
+          // ⭐ Preserve quizId if the payload doesn't specify one
+          if (merged.quizId === undefined) {
+            merged.quizId = existingLesson?.quizId;
+          }
+
+          merged.content = {
+            videoMediaId: newContent.videoMediaId || existingContent.videoMediaId || null,
+            fileMediaId: newContent.fileMediaId || existingContent.fileMediaId || null,
+            textContent: newContent.textContent ?? existingContent.textContent ?? "",
+            assignmentInstructions:
+              newContent.assignmentInstructions ?? existingContent.assignmentInstructions ?? "",
+            transcriptKey: newContent.transcriptKey || existingContent.transcriptKey,
           };
+
+          return merged;
+          
         });
         return { ...newSection, lessons: mergedLessons };
       });

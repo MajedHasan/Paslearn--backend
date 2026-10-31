@@ -35,7 +35,7 @@ import learningRoutes from "../modules/course/learning/learning.routes";
 import publicCourseRoutes from "../modules/course/publicCourse/publicCourse.routes";
 import enrollmentRoutes from "../modules/course/enrollment/enrollment.routes";
 import progressRoutes from "../modules/course/progress/progress.routes";
-import quizRoutes from "../modules/course/quiz/quiz.routes";
+import quizRoutes, { quizAttemptRoutes } from "../modules/course/quiz/quiz.routes";
 import certificateRoutes from "../modules/course/certificate/certificate.routes";
 import reviewRoutes, {
   teacherReviewRoutes,
@@ -100,6 +100,7 @@ const routes = [
   { path: "/enrollments", route: enrollmentRoutes },
   { path: "/progress", route: progressRoutes },
   { path: "/quizzes", route: quizRoutes },
+  { path: "/attempts", route: quizAttemptRoutes },
   { path: "/affiliate", route: affiliateRoutes },
 
   // ═══════════════════════════════════════════════════

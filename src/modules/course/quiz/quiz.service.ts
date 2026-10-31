@@ -51,19 +51,72 @@ function gradeAnswer(question: any, answer: any): { isCorrect: boolean; pointsAw
 
 export const quizService = {
   // ─── Teacher authoring ───
-  async createOrUpdate(courseId: string, teacherId: string, payload: any, quizId?: string) {
-    const course = await CourseModel.findOne({ _id: courseId, teacher: teacherId, deletedAt: null });
+  async createOrUpdate(
+    courseId: string,
+    teacherId: string,
+    payload: any,
+    quizId?: string
+  ) {
+    const course = await CourseModel.findOne({
+      _id: courseId,
+      teacher: teacherId,
+      deletedAt: null,
+    });
     if (!course) throw new AppError("Course not found or not yours", 404);
 
+    let quiz: any;
     if (quizId) {
-      const quiz = await QuizModel.findOne({ _id: quizId, course: courseId, teacher: teacherId });
+      quiz = await QuizModel.findOne({
+        _id: quizId,
+        course: courseId,
+        teacher: teacherId,
+      });
       if (!quiz) throw new AppError("Quiz not found", 404);
       Object.assign(quiz, payload);
       if (quiz.isPublished && !quiz.publishedAt) quiz.publishedAt = new Date();
       await quiz.save();
-      return quiz;
+    } else {
+      quiz = await QuizModel.create({
+        ...payload,
+        course: courseId,
+        teacher: teacherId,
+        // ⭐ Default to published when attached to a lesson
+        isPublished:
+          payload.isPublished !== undefined
+            ? payload.isPublished
+            : !!payload.lessonId,
+        publishedAt:
+          (payload.isPublished ?? !!payload.lessonId) ? new Date() : null,
+      });
     }
-    return QuizModel.create({ ...payload, course: courseId, teacher: teacherId });
+
+    // ⭐ Link quiz._id back to the course's lesson
+    if (payload.sectionId && payload.lessonId) {
+      try {
+        await CourseModel.updateOne(
+          {
+            _id: courseId,
+            "sections.id": payload.sectionId,
+            "sections.lessons.id": payload.lessonId,
+          },
+          {
+            $set: {
+              "sections.$[s].lessons.$[l].quizId": quiz._id,
+            },
+          },
+          {
+            arrayFilters: [
+              { "s.id": payload.sectionId },
+              { "l.id": payload.lessonId },
+            ],
+          }
+        );
+      } catch (err: any) {
+        console.error("[quiz.createOrUpdate] lesson link failed:", err?.message);
+      }
+    }
+
+    return quiz;
   },
 
   async listForCourse(courseId: string, teacherId: string) {
@@ -77,55 +130,121 @@ export const quizService = {
       { new: true }
     );
     if (!quiz) throw new AppError("Quiz not found", 404);
+
+    // ⭐ Clear lesson.quizId so the next edit doesn't reference a dead quiz
+    if ((quiz as any).lessonId && (quiz as any).course) {
+      try {
+        await CourseModel.updateOne(
+          {
+            _id: (quiz as any).course,
+            "sections.lessons.id": (quiz as any).lessonId,
+          },
+          {
+            $set: { "sections.$[l].quizId": null },
+          },
+          {
+            arrayFilters: [{ "l.id": (quiz as any).lessonId }],
+          }
+        );
+      } catch (err: any) {
+        console.error("[quiz.deleteQuiz] unlink failed:", err?.message);
+      }
+    }
+
     return quiz;
   },
 
   // ─── Student flow ───
   async getForStudent(userId: string, quizId: string) {
-    const quiz = await QuizModel.findOne({ _id: quizId, isPublished: true, deletedAt: null }).lean();
+    const quiz: any = await QuizModel.findOne({
+      _id: quizId,
+      deletedAt: null,
+    }).lean();
     if (!quiz) throw new AppError("Quiz not found", 404);
-    const ent = await entitlementService.checkByRef(userId, "course", (quiz as any).course);
-    if (!ent) throw new AppError("Not enrolled", 403);
 
-    const attempts = await QuizAttemptModel.find({ user: userId, quiz: quizId }).sort({ attemptNumber: -1 }).lean();
+    // ⭐ Owner can preview drafts; students cannot
+    const isOwner = String(quiz.teacher) === userId;
+    if (!quiz.isPublished && !isOwner) {
+      throw new AppError("Quiz not found", 404);
+    }
+
+    // ⭐ Owner doesn't need an entitlement
+    if (!isOwner) {
+      const ent = await entitlementService.checkByRef(
+        userId,
+        "course",
+        quiz.course
+      );
+      if (!ent) throw new AppError("Not enrolled", 403);
+    }
+
+    const attempts = await QuizAttemptModel.find({ user: userId, quiz: quizId })
+      .sort({ attemptNumber: -1 })
+      .lean();
     const bestPass = attempts.find((a) => a.passed);
-    const canShow = (quiz as any).showCorrectAnswers === "after_attempt" && attempts.length > 0
-      || (quiz as any).showCorrectAnswers === "after_pass" && !!bestPass;
+    const canShow =
+      (quiz.showCorrectAnswers === "after_attempt" && attempts.length > 0) ||
+      (quiz.showCorrectAnswers === "after_pass" && !!bestPass);
 
     const finalQuiz = stripCorrectAnswers(quiz, canShow);
     return {
       quiz: finalQuiz,
       attempts: attempts.map((a) => ({
-        _id: a._id, attemptNumber: a.attemptNumber, status: a.status,
-        score: a.score, maxScore: a.maxScore, passed: a.passed,
-        startedAt: a.startedAt, submittedAt: a.submittedAt,
+        _id: a._id,
+        attemptNumber: a.attemptNumber,
+        status: a.status,
+        score: a.score,
+        maxScore: a.maxScore,
+        passed: a.passed,
+        startedAt: a.startedAt,
+        submittedAt: a.submittedAt,
       })),
-      canStart: (quiz as any).maxAttempts === 0 || attempts.length < (quiz as any).maxAttempts,
+      canStart:
+        quiz.maxAttempts === 0 || attempts.length < quiz.maxAttempts,
     };
   },
 
   async startAttempt(userId: string, quizId: string) {
-    const quiz = await QuizModel.findOne({ _id: quizId, isPublished: true, deletedAt: null });
+    const quiz: any = await QuizModel.findOne({
+      _id: quizId,
+      deletedAt: null,
+    });
     if (!quiz) throw new AppError("Quiz not found", 404);
 
-    const ent = await entitlementService.checkByRef(userId, "course", (quiz as any).course);
-    if (!ent) throw new AppError("Not enrolled", 403);
+    // ⭐ Owner bypass
+    const isOwner = String(quiz.teacher) === userId;
+    if (!quiz.isPublished && !isOwner) {
+      throw new AppError("Quiz not found", 404);
+    }
+
+    if (!isOwner) {
+      const ent = await entitlementService.checkByRef(
+        userId,
+        "course",
+        quiz.course
+      );
+      if (!ent) throw new AppError("Not enrolled", 403);
+    }
 
     const past = await QuizAttemptModel.find({ user: userId, quiz: quizId });
     if (quiz.maxAttempts > 0 && past.length >= quiz.maxAttempts) {
       throw new AppError("Attempt limit reached", 400);
     }
     const inProgress = past.find((a) => a.status === "in_progress");
-    if (inProgress) return { attempt: inProgress, quiz: stripCorrectAnswers(quiz.toObject(), false) };
+    if (inProgress) {
+      return {
+        attempt: inProgress,
+        quiz: stripCorrectAnswers(quiz.toObject(), false),
+      };
+    }
 
-    // Shuffle snapshot — freezes the order for this attempt
     let questions = [...quiz.questions];
     if (quiz.shuffleQuestions) questions = shuffle(questions);
 
     const attempt = await QuizAttemptModel.create({
       user: userId,
       quiz: quiz._id,
-      course: (quiz as any).course,
+      course: quiz.course,
       attemptNumber: past.length + 1,
       status: "in_progress",
       startedAt: new Date(),
