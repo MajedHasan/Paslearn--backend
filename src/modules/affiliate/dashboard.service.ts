@@ -205,7 +205,11 @@ export const affiliateDashboardService = {
 
     const [data, total] = await Promise.all([
       CommissionModel.find(filter)
-        .populate("order", "orderNumber total createdAt status")
+        .populate({
+          path: "order",
+          select: "orderNumber total createdAt status user",
+          populate: { path: "user", select: "name email profileImageUrl" },
+        })
         .populate("product", "title type")
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)

@@ -293,9 +293,9 @@ export const orderService = {
           // TODO: activate teacher's plan: TeacherProfile.findByIdAndUpdate(...)
         }
 
-        // Record affiliate commission
+        // ⭐ Record affiliate commission AND adjust teacher earnings
         if (freshOrder.affiliateCode && item.commissionSnapshot?.enabled) {
-          await affiliateService.recordCommission({
+          const commission = await affiliateService.recordCommission({
             affiliateCode: freshOrder.affiliateCode,
             order: freshOrder._id,
             orderItemId: item._id,
@@ -305,6 +305,20 @@ export const orderService = {
             basePrice: item.finalPrice,
             currency: freshOrder.currency,
           });
+
+          if (commission && (commission as any).amount > 0) {
+            const newTeacherEarning = Math.max(
+              0,
+              item.finalPrice - item.platformFee - (commission as any).amount
+            );
+            await OrderModel.updateOne(
+              { _id: orderId, "items._id": item._id },
+              { $set: { "items.$.teacherEarning": newTeacherEarning } }
+            );
+            console.log(
+              `[markPaid] Order ${orderId} item ${item._id}: teacher earning adjusted to $${newTeacherEarning.toFixed(2)} (was $${item.teacherEarning.toFixed(2)}, affiliate got $${(commission as any).amount.toFixed(2)})`
+            );
+          }
         }
 
         // Mark item as granted

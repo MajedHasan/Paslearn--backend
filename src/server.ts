@@ -39,6 +39,7 @@ import { cronService } from "./modules/cron/cron.service";
 // Each job self-registers when its file is imported.
 import "./modules/cron/jobs/courseRetentionCleanup.job";
 import "./modules/cron/jobs/promoteCommissions.job";
+import "./modules/cron/jobs/teacherPayouts.job";
 // When you add more jobs later, just import them here:
 // import "./modules/cron/jobs/aiBatchJob.job";
 // import "./modules/cron/jobs/emailDigest.job";

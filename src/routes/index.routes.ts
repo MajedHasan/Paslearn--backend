@@ -44,6 +44,11 @@ import reviewRoutes, {
 import qaRoutes from "../modules/course/qa/qa.routes";
 import analyticsRoutes from "../modules/course/analytics/analytics.routes";
 import adminCourseRoutes from "../modules/course/adminCourse.routes";
+import { adminTeacherPayoutRoutes } from "../modules/teacher/earnings/payout.routes";
+
+// -- Teacher earnings module
+import teacherEarningsRoutes from "../modules/teacher/earnings/earnings.routes";
+import teacherPayoutRoutes from "../modules/teacher/earnings/payout.routes";
 
 // ── AI ─────────────────────────────────────────────────
 import {
@@ -111,6 +116,8 @@ const routes = [
   { path: "/teacher/reviews", route: teacherReviewRoutes },
   { path: "/teacher/analytics", route: analyticsRoutes },
   { path: "/course-ai", route: courseAiRoutes },              // ⭐ FIXED — was missing
+  { path: "/teacher/earnings", route: teacherEarningsRoutes },
+  { path: "/teacher/payouts", route: teacherPayoutRoutes },
 
   // ═══════════════════════════════════════════════════
   // Admin
@@ -123,6 +130,7 @@ const routes = [
   { path: "/admin/courses", route: adminCourseRoutes },
   { path: "/admin/cron", route: cronRoutes },
   { path: "/admin/course-ai", route: adminCourseAiRoutes },   // ⭐ correct admin AI
+  { path: "/admin/teacher-payouts", route: adminTeacherPayoutRoutes },
   // ⭐ REMOVED: { path: "/admin/ai", route: courseAiRoutes } — was wrong (duplicate of teacher routes)
 ];
 
