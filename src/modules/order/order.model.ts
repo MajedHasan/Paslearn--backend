@@ -1,3 +1,4 @@
+// src/modules/order/order.model.ts
 import { Schema, model } from "mongoose";
 import { IOrder } from "./order.interface";
 
@@ -30,6 +31,20 @@ const orderItemSchema = new Schema<IOrder["items"][number]>({
   subscriptionId: String,
 });
 
+// ⭐ FIX: wrap the coupon shape in an explicit subdocument schema.
+// Inline objects that contain a `type` key are misinterpreted by Mongoose
+// as `coupon: String` — which is why the save fails.
+const orderCouponSchema = new Schema(
+  {
+    couponId: { type: Schema.Types.ObjectId, ref: "Coupon" },
+    code: String,
+    type: String,
+    value: Number,
+    appliedAmount: Number,
+  },
+  { _id: false }
+);
+
 const orderSchema = new Schema<IOrder>({
   orderNumber: { type: String, required: true, unique: true, index: true },
   user: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
@@ -39,13 +54,7 @@ const orderSchema = new Schema<IOrder>({
   discountTotal: { type: Number, default: 0 },
   taxTotal: { type: Number, default: 0 },
   total: { type: Number, required: true },
-  coupon: {
-    couponId: { type: Schema.Types.ObjectId, ref: "Coupon" },
-    code: String,
-    type: String,
-    value: Number,
-    appliedAmount: Number,
-  },
+  coupon: { type: orderCouponSchema, default: null },
   affiliateCode: String,
   status: {
     type: String,

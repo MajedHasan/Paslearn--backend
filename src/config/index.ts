@@ -21,4 +21,16 @@ export default {
   reset: {
     expiresIn: (process.env.RESET_EXPIRES_IN || "1h") as any,
   },
+  stripe: {
+    secretKey: process.env.STRIPE_SECRET_KEY || "",
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || "",
+  },
+  paypal: {
+    clientId: process.env.PAYPAL_CLIENT_ID || "",
+    clientSecret: process.env.PAYPAL_CLIENT_SECRET || "",
+    webhookId: process.env.PAYPAL_WEBHOOK_ID || "",
+  },
+  platform: {
+    platformFeePercentage: parseFloat(process.env.PLATFORM_FEE_PERCENTAGE || "10"),
+  }
 };

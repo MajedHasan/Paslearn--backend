@@ -1,3 +1,4 @@
+// src/modules/order/order.controller.ts
 import { Request, Response, NextFunction } from "express";
 import { orderService } from "./order.service";
 import { paymentService } from "../payments/payment.service";
@@ -5,10 +6,22 @@ import { paymentProviders } from "../payments/factory";
 import { AppError } from "../../utils/appError";
 import OrderModel from "./order.model";
 
+function detectCountry(req: Request): string | undefined {
+  const raw =
+    (req.headers["x-country"] as string) ||
+    (req.headers["cf-ipcountry"] as string) ||
+    (req.headers["x-vercel-ip-country"] as string) ||
+    "";
+  const code = String(raw).trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(code) ? code : undefined;
+}
+
 export const orderController = {
   async preview(req: Request, res: Response, next: NextFunction) {
     try {
-      const data = await orderService.preview((req as any).user.sub);
+      const data = await orderService.preview((req as any).user.sub, {
+        country: detectCountry(req),
+      });
       res.json({ success: true, data });
     } catch (err) { next(err); }
   },
@@ -17,6 +30,7 @@ export const orderController = {
     try {
       const order = await orderService.createFromCart((req as any).user.sub, {
         affiliateCode: req.body.affiliateCode,
+        country: detectCountry(req),
       });
       res.status(201).json({ success: true, data: order });
     } catch (err) { next(err); }
@@ -45,7 +59,6 @@ export const orderController = {
             customerEmail: user.email,
           });
 
-      // Persist payment record
       await paymentService.record({
         orderId: String(order._id),
         provider,
@@ -102,5 +115,4 @@ export const orderController = {
       next(err);
     }
   },
-
 };

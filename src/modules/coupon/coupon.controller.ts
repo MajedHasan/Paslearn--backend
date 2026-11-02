@@ -1,18 +1,40 @@
+// src/modules/coupon/coupon.controller.ts
 import { Request, Response, NextFunction } from "express";
 import { CouponModel } from "./coupon.model";
-import { couponService } from "./coupon.service";
+import { couponService, assertItemTypesForOwner } from "./coupon.service";
 import { AppError } from "../../utils/appError";
+import mongoose from "mongoose";
+
+function requireSub(req: Request): string {
+  const user = (req as any).user;
+  if (!user?.sub) throw new AppError("Authentication error: missing user ID", 401);
+  return String(user.sub);
+}
+
+function isValidId(id: string): boolean {
+  return mongoose.Types.ObjectId.isValid(id);
+}
 
 export const couponController = {
+  /**
+   * Role-aware list:
+   *   Teacher → only their own (ownerType="teacher", ownerId=self)
+   *   Admin   → only platform coupons (ownerType="admin")
+   */
   async list(req: Request, res: Response, next: NextFunction) {
     try {
       const user = (req as any).user;
       const filter: any = { deletedAt: null };
+
       if (user.role === "teacher") {
-        filter.$or = [{ ownerType: "admin" }, { ownerId: user.sub }];
+        filter.ownerType = "teacher";
+        filter.ownerId = requireSub(req);
+      } else if (user.role === "admin") {
+        filter.ownerType = "admin";
       }
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 20;
+
+      const page = Math.max(1, parseInt(req.query.page as string) || 1);
+      const limit = Math.min(500, parseInt(req.query.limit as string) || 20);
       const search = req.query.q as string;
       if (search) filter.code = { $regex: search, $options: "i" };
 
@@ -21,79 +43,100 @@ export const couponController = {
         CouponModel.countDocuments(filter),
       ]);
       res.json({ success: true, data, total, page, limit, totalPages: Math.ceil(total / limit) });
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 
   async get(req: Request, res: Response, next: NextFunction) {
     try {
+      const user = (req as any).user;
       const doc = await CouponModel.findOne({ _id: req.params.id, deletedAt: null }).lean();
       if (!doc) throw new AppError("Coupon not found", 404);
+
+      // Teacher can only see their own
+      if (
+        user.role === "teacher" &&
+        (doc.ownerType !== "teacher" || String(doc.ownerId) !== String(user.sub))
+      ) {
+        throw new AppError("Forbidden", 403);
+      }
+
       res.json({ success: true, data: doc });
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 
   async create(req: Request, res: Response, next: NextFunction) {
     try {
       const user = (req as any).user;
       if (!["admin", "teacher"].includes(user.role)) throw new AppError("Forbidden", 403);
+
+      const ownerType: "admin" | "teacher" = user.role === "admin" ? "admin" : "teacher";
+      const ownerId = ownerType === "teacher" ? requireSub(req) : undefined;
+
       const payload = {
         ...req.body,
-        ownerType: user.role === "admin" ? "admin" : "teacher",
-        ownerId: user.role === "teacher" ? user.sub : undefined,
+        ownerType,
+        ownerId,
       };
       if (payload.startDate) payload.startDate = new Date(payload.startDate);
       if (payload.endDate) payload.endDate = new Date(payload.endDate);
-      const doc = await CouponModel.create(payload);
+
+      const doc = await couponService.createForOwner(payload, ownerType, ownerId);
+
+      // console.log(`[coupon.create] ✓ ${doc._id} code=${doc.code} ownerType=${doc.ownerType} ownerId=${doc.ownerId}`);
       res.status(201).json({ success: true, data: doc });
-    } catch (err: any) {
-      if (err.code === 11000) return next(new AppError("Coupon code already exists", 409));
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 
   async update(req: Request, res: Response, next: NextFunction) {
     try {
       const user = (req as any).user;
-      const doc = await CouponModel.findOne({ _id: req.params.id, deletedAt: null });
-      if (!doc) throw new AppError("Coupon not found", 404);
-      if (user.role === "teacher" && String(doc.ownerId) !== user.sub) {
-        throw new AppError("Forbidden", 403);
-      }
-      const payload = { ...req.body };
-      delete payload.usedCount;
-      delete payload.ownerType;
-      delete payload.ownerId;
-      if (payload.startDate) payload.startDate = new Date(payload.startDate);
-      if (payload.endDate) payload.endDate = new Date(payload.endDate);
-      Object.assign(doc, payload);
-      await doc.save();
+      if (!isValidId(req.params.id)) throw new AppError("Invalid coupon ID", 400);
+
+      const ownerType: "admin" | "teacher" = user.role === "admin" ? "admin" : "teacher";
+      const ownerId = ownerType === "teacher" ? requireSub(req) : undefined;
+
+      const doc = await couponService.updateForOwner(req.params.id, req.body, ownerType, ownerId);
+
+      // console.log(`[coupon.update] ✓ ${doc._id} updated by ${user.sub}`);
       res.json({ success: true, data: doc });
-    } catch (err) {
+    } catch (err: any) {
+      if (err.code === 11000) {
+        return next(new AppError("You already have a coupon with this code", 409));
+      }
       next(err);
     }
   },
 
   async remove(req: Request, res: Response, next: NextFunction) {
     try {
-      const doc = await CouponModel.findByIdAndUpdate(
-        req.params.id,
-        { deletedAt: new Date(), status: "disabled" },
-        { new: true }
-      );
+      const user = (req as any).user;
+      if (!isValidId(req.params.id)) throw new AppError("Invalid coupon ID", 400);
+
+      const doc = await CouponModel.findOne({ _id: req.params.id, deletedAt: null });
       if (!doc) throw new AppError("Coupon not found", 404);
-      res.json({ success: true, data: doc });
-    } catch (err) {
-      next(err);
-    }
+
+      const isAdmin = user.role === "admin";
+      const ownerIdStr = doc.ownerId ? String(doc.ownerId) : "";
+      const userIdStr = user.sub ? String(user.sub) : "";
+      const isOwner = ownerIdStr !== "" && ownerIdStr === userIdStr;
+
+      if (!isAdmin && !isOwner) {
+        throw new AppError("You can only delete your own coupons", 403);
+      }
+
+      const deleted = await couponService.softDelete(req.params.id);
+      // console.log(`[coupon.remove] ✓ ${doc._id} deleted by ${userIdStr}`);
+      res.json({ success: true, data: deleted });
+    } catch (err) { next(err); }
   },
 
+  /**
+   * Public endpoint — resolves the best candidate for a code + cart.
+   * Used by `/api/coupons/validate` and `/api/cart/apply-coupon`.
+   */
   async validate(req: Request, res: Response, next: NextFunction) {
     try {
-      const user = (req as any).user; // optional — guest carts allowed
+      const user = (req as any).user;
       const { code, items, currency, country } = req.body;
       if (!code || !Array.isArray(items)) {
         throw new AppError("code and items required", 400);
@@ -107,6 +150,7 @@ export const couponController = {
 
       const result = await couponService.resolve({
         userId: user?.sub,
+        userEmail: user?.email,
         code,
         items,
         currency: currency || "USD",
@@ -122,19 +166,18 @@ export const couponController = {
         success: true,
         data: {
           couponCode: result.preview!.coupon.code,
+          couponId: String(result.preview!.coupon._id),
+          ownerType: result.preview!.coupon.ownerType,
           discountTotal: result.preview!.discountTotal,
           discountByProduct: result.preview!.discountByProduct,
           subtotal: result.preview!.subtotal,
           finalSubtotal: result.preview!.finalSubtotal,
         },
       });
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 
-
-  // ═══ Teacher view — their own redemptions ═══
+  // ═══ Teacher-view redemptions ═══
   async teacherRedemptions(req: Request, res: Response, next: NextFunction) {
     try {
       const user = (req as any).user;
@@ -168,7 +211,7 @@ export const couponController = {
     } catch (err) { next(err); }
   },
 
-  // ═══ Admin view — all redemptions ═══
+  // ═══ Admin-view redemptions ═══
   async adminRedemptions(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await couponService.listRedemptions({
@@ -197,5 +240,4 @@ export const couponController = {
       res.json({ success: true, data });
     } catch (err) { next(err); }
   },
-
 };

@@ -49,7 +49,7 @@ app.use(
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
+  max: 300,
 });
 app.use(limiter);
 

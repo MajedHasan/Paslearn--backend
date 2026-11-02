@@ -1,3 +1,4 @@
+// src/modules/order/order.service.ts
 import OrderModel from "./order.model";
 import CartModel from "../cart/cart.model";
 import ProductModel from "../product/product.model";
@@ -6,12 +7,11 @@ import { couponService } from "../coupon/coupon.service";
 import { entitlementService } from "../entitlement/entitlement.service";
 import { enrollmentService } from "../course/enrollment/enrollment.service";
 import { affiliateService } from "../affiliate/affiliate.service";
-import { cartService } from "../cart/cart.service";
 import { AppError } from "../../utils/appError";
-import { Types } from "mongoose";
 import { paymentService } from "../payments/payment.service";
+import config from "../../config";
 
-const PLATFORM_FEE_PERCENT = 10; // 10% platform fee
+const PLATFORM_FEE_PERCENT = config.platform.platformFeePercentage || 10;
 
 function generateOrderNumber(): string {
   const now = new Date();
@@ -22,62 +22,120 @@ function generateOrderNumber(): string {
 }
 
 export const orderService = {
-  async preview(userId: string) {
+// src/modules/order/order.service.ts
+// Replace ONLY `preview` and `createFromCart`. Everything else stays.
+
+  async preview(userId: string, opts: { country?: string } = {}) {
     const cart = await CartModel.findOne({ user: userId }).populate("items.product");
     if (!cart || !cart.items.length) throw new AppError("Cart is empty", 400);
 
-    const subtotal = cart.items.reduce((a, i) => a + i.priceSnapshot, 0);
+    const { default: UserModel } = await import("../../models/user.model");
+    const user = await UserModel.findById(userId).select("email country").lean();
+    const userEmail = (user as any)?.email;
+    const userCountry = (user as any)?.country;
+    const finalCountry = opts.country || userCountry;
+
+    const { default: OrderModel } = await import("./order.model");
+    const hasPriorPurchases = !!(await OrderModel.exists({
+      user: userId,
+      status: "paid",
+    }));
+
+    // ⭐ idOf handles both populated docs and raw ObjectIds
+    const idOf = (v: any): string => {
+      if (!v) return "";
+      if (typeof v === "object" && v._id) return String(v._id);
+      return String(v);
+    };
+
+    const productIds = (cart.items as any[]).map((i) => idOf(i.product)).filter(Boolean);
+    const productDocs = productIds.length
+      ? await ProductModel.find({ _id: { $in: productIds } }).select("refId teacherId").lean()
+      : [];
+    const productMap = new Map(productDocs.map((p: any) => [String(p._id), p]));
+
+    const courseIds = (cart.items as any[])
+      .map((i) => idOf(i.refId) || idOf((productMap.get(idOf(i.product)) as any)?.refId))
+      .filter(Boolean);
+    const courseDocs = courseIds.length
+      ? await CourseModel.find({ _id: { $in: courseIds } }).select("category").lean()
+      : [];
+    const categoryMap = new Map(courseDocs.map((c: any) => [String(c._id), c.category]));
+
+    const couponItems = (cart.items as any[]).map((i) => {
+      const pid = idOf(i.product);
+      const prodDoc: any = productMap.get(pid);
+      const rid = idOf(i.refId) || idOf(prodDoc?.refId);
+      const tid = idOf(i.teacher) || idOf(prodDoc?.teacherId);
+      return {
+        product: pid,
+        productType: i.productType as any,
+        refId: rid,
+        price: Number(i.priceSnapshot) || 0,
+        teacher: tid,
+        category: i.productType === "course" ? categoryMap.get(rid) : undefined,
+      };
+    });
+
+    const subtotal = (cart.items as any[]).reduce((a, i) => a + i.priceSnapshot, 0);
     let discountTotal = 0;
     let discountByProduct: Record<string, number> = {};
     let couponCode: string | null = null;
 
     if (cart.couponId) {
-        const coupon = await couponService.findByIdOrFail(String(cart.couponId)).catch(() => null);
-        if (coupon) {
-        const result = await couponService.resolve({
-            userId,
-            code: coupon.code,
-            currency: cart.currency,
-            items: cart.items.map((i) => ({
-            product: String(i.product),
-            productType: i.productType as any,
-            refId: String(i.refId),
-            price: i.priceSnapshot,
-            teacher: String(i.teacher),
-            })),
-            country: "US",
+      const coupon = await couponService
+        .findByIdOrFail(String(cart.couponId))
+        .catch(() => null);
+      if (coupon) {
+        const result = await couponService.validateSingle(coupon, {
+          userId,
+          userEmail,
+          items: couponItems,
+          currency: cart.currency || "USD",
+          country: finalCountry,
+          hasPriorPurchases,
         });
-        if (result.valid) {
-            discountTotal = result.preview!.discountTotal;
-            discountByProduct = result.preview!.discountByProduct;
-            couponCode = result.preview!.coupon.code;
+        if (result.valid && result.preview) {
+          discountTotal = result.preview.discountTotal;
+          discountByProduct = result.preview.discountByProduct;
+          couponCode = result.preview.coupon.code;
+        } else {
+          console.warn(
+            `[order.preview] coupon ${coupon.code} rejected: ${result.reason}`
+          );
         }
-        }
+      }
     }
 
     return {
-        items: cart.items.map((i) => ({
-        product: i.product,
-        productType: i.productType,
-        refId: i.refId,
-        price: i.priceSnapshot,
-        discount: discountByProduct[String(i.product)] || 0,
-        finalPrice: Math.max(0, i.priceSnapshot - (discountByProduct[String(i.product)] || 0)),
-        })),
-        subtotal,
-        discountTotal,
-        taxTotal: 0,
-        total: Math.max(0, subtotal - discountTotal),
-        currency: cart.currency,
-        couponCode,
+      items: (cart.items as any[]).map((i) => {
+        const pid = idOf(i.product);
+        const discount = discountByProduct[pid] || 0;
+        return {
+          product: i.product,
+          productType: i.productType,
+          refId: i.refId,
+          price: i.priceSnapshot,
+          discount,
+          finalPrice: Math.max(0, i.priceSnapshot - discount),
+        };
+      }),
+      subtotal,
+      discountTotal,
+      taxTotal: 0,
+      total: Math.max(0, subtotal - discountTotal),
+      currency: cart.currency || "USD",
+      couponCode,
     };
   },
 
-  async createFromCart(userId: string, options: { affiliateCode?: string } = {}) {
+  async createFromCart(
+    userId: string,
+    options: { affiliateCode?: string; country?: string } = {}
+  ) {
     const cart = await CartModel.findOne({ user: userId });
     if (!cart || !cart.items.length) throw new AppError("Cart is empty", 400);
 
-    // ⭐ STEP 1 — Look for an existing pending order within the last 30 min
     const existingPending = await OrderModel.findOne({
       user: userId,
       status: "pending",
@@ -85,8 +143,12 @@ export const orderService = {
     }).sort({ createdAt: -1 });
 
     if (existingPending) {
-      // Compare cart items
-      const cartProductIds = new Set(cart.items.map((i: any) => String(i.product)));
+      const cartProductIds = new Set(
+        (cart.items as any[]).map((i) => {
+          const v: any = i.product;
+          return typeof v === "object" && v?._id ? String(v._id) : String(v);
+        })
+      );
       const orderProductIds = new Set(
         existingPending.items.map((i: any) => String(i.product))
       );
@@ -94,75 +156,112 @@ export const orderService = {
         cartProductIds.size === orderProductIds.size &&
         [...cartProductIds].every((id) => orderProductIds.has(id));
 
-      if (itemsMatch) {
-        console.log(
-          `[createFromCart] Reusing pending order ${existingPending.orderNumber}`
-        );
-        return existingPending;
-      }
+      if (itemsMatch) return existingPending;
 
-      // Different cart — cancel the old pending order first
-      console.log(
-        `[createFromCart] Cancelling stale pending order ${existingPending.orderNumber}`
-      );
       try {
         existingPending.status = "cancelled";
         await existingPending.save();
-        // Reverse any coupon reservations tied to it
         await couponService.reverse(String(existingPending._id));
       } catch (e: any) {
-        console.error("[createFromCart] Failed to cancel stale order:", e?.message);
+        console.error("[createFromCart] stale cancel failed:", e?.message);
       }
     }
 
+    const idOf = (v: any): string => {
+      if (!v) return "";
+      if (typeof v === "object" && v._id) return String(v._id);
+      return String(v);
+    };
 
-    const productIds = cart.items.map((i) => i.product);
-    const products = await ProductModel.find({ _id: { $in: productIds }, status: "published", deletedAt: null });
+    const productIds = (cart.items as any[]).map((i) => idOf(i.product)).filter(Boolean);
+    const products = await ProductModel.find({
+      _id: { $in: productIds },
+      status: "published",
+      deletedAt: null,
+    });
     const productMap = new Map(products.map((p) => [String(p._id), p]));
 
-    for (const item of cart.items) {
-        if (!productMap.has(String(item.product))) throw new AppError("Product no longer available", 400);
-        if (item.productType === "course") {
+    for (const item of cart.items as any[]) {
+      if (!productMap.has(idOf(item.product))) {
+        throw new AppError("Product no longer available", 400);
+      }
+      if (item.productType === "course") {
         const course = await CourseModel.findById(item.refId);
         if (!course || course.status !== "published" || course.enrollmentsPaused) {
-            throw new AppError("Course unavailable", 400);
+          throw new AppError("Course unavailable", 400);
         }
         if (course.enrollmentLimit > 0 && course.enrollmentCount >= course.enrollmentLimit) {
-            throw new AppError("Course is full", 400);
+          throw new AppError("Course is full", 400);
         }
-        }
-        const owns = await entitlementService.check(userId, item.product);
-        if (owns) throw new AppError("You already own one of the items", 400);
+      }
+      const owns = await entitlementService.check(userId, idOf(item.product));
+      if (owns) throw new AppError("You already own one of the items", 400);
     }
 
-    // ⭐ NEW — resolve by stored couponId
+    const { default: UserModel } = await import("../../models/user.model");
+    const user = await UserModel.findById(userId).select("email country").lean();
+    const userEmail = (user as any)?.email;
+    const userCountry = (user as any)?.country;
+    const finalCountry = options.country || userCountry;
+
+    const hasPriorPurchases = !!(await OrderModel.exists({
+      user: userId,
+      status: "paid",
+    }));
+
+    const courseIds = (cart.items as any[])
+      .map((i) => idOf(i.refId))
+      .filter(Boolean);
+    const courseDocs = courseIds.length
+      ? await CourseModel.find({ _id: { $in: courseIds } }).select("category").lean()
+      : [];
+    const categoryMap = new Map(courseDocs.map((c: any) => [String(c._id), c.category]));
+
+    const couponItems = (cart.items as any[]).map((i: any) => {
+      const pid = idOf(i.product);
+      const prodDoc: any = productMap.get(pid);
+      const rid = idOf(i.refId) || idOf(prodDoc?.refId);
+      const tid = idOf(i.teacher) || idOf(prodDoc?.teacherId);
+      return {
+        product: pid,
+        productType: i.productType as any,
+        refId: rid,
+        price: Number(i.priceSnapshot) || 0,
+        teacher: tid,
+        category: i.productType === "course" ? categoryMap.get(rid) : undefined,
+      };
+    });
+
     let couponPreview: any = null;
     if (cart.couponId) {
-        const coupon = await couponService.findByIdOrFail(String(cart.couponId)).catch(() => null);
-        if (!coupon) throw new AppError("Coupon no longer exists", 400);
+      const coupon = await couponService
+        .findByIdOrFail(String(cart.couponId))
+        .catch(() => null);
+      if (!coupon) throw new AppError("Coupon no longer exists", 400);
 
-        const result = await couponService.resolve({
-        userId, code: coupon.code, currency: cart.currency,
-        items: cart.items.map((i) => ({
-            product: String(i.product), productType: i.productType as any,
-            refId: String(i.refId), price: i.priceSnapshot, teacher: String(i.teacher),
-        })),
-        country: "US",
-        });
-        if (!result.valid || String(result.preview!.coupon._id) !== String(cart.couponId)) {
+      const result = await couponService.validateSingle(coupon, {
+        userId,
+        userEmail,
+        items: couponItems,
+        currency: cart.currency || "USD",
+        country: finalCountry,
+        hasPriorPurchases,
+      });
+
+      if (!result.valid || !result.preview) {
         throw new AppError(result.reason || "Coupon no longer valid for this cart", 400);
-        }
-        couponPreview = result.preview!;
+      }
+      couponPreview = result.preview;
     }
 
-    const subtotal = cart.items.reduce((a, i) => a + i.priceSnapshot, 0);
+    const subtotal = (cart.items as any[]).reduce((a, i) => a + i.priceSnapshot, 0);
     const discountTotal = couponPreview?.discountTotal || 0;
     const total = Math.max(0, subtotal - discountTotal);
 
-    // Build order items
-    const orderItems = cart.items.map((i) => {
-      const product: any = productMap.get(String(i.product));
-      const discount = couponPreview?.discountByProduct[String(i.product)] || 0;
+    const orderItems = (cart.items as any[]).map((i) => {
+      const pid = idOf(i.product);
+      const product: any = productMap.get(pid);
+      const discount = couponPreview?.discountByProduct[pid] || 0;
       const finalPrice = Math.max(0, i.priceSnapshot - discount);
       const platformFee = Math.round(finalPrice * PLATFORM_FEE_PERCENT) / 100;
       return {
@@ -184,7 +283,7 @@ export const orderService = {
     const order = await OrderModel.create({
       orderNumber: generateOrderNumber(),
       user: userId,
-      currency: cart.currency,
+      currency: cart.currency || "USD",
       items: orderItems,
       subtotal,
       discountTotal,
@@ -203,7 +302,6 @@ export const orderService = {
       status: "pending",
     });
 
-    // Reserve coupon (increments usedCount + creates redemption)
     if (couponPreview) {
       await couponService.reserve(
         couponPreview.coupon._id,
@@ -213,49 +311,35 @@ export const orderService = {
       );
     }
 
-    // Free order shortcut: no payment needed
     if (total === 0) {
-        await this.markPaid(String(order._id), { free: true });
-        // Fire-and-forget invoice generation — see Part G analytics/invoice service
-        import("../invoice/invoice.service").then((m) => m.invoiceService.generateForOrder(String(order._id))).catch(console.error);
+      await this.markPaid(String(order._id), { free: true });
+      import("../invoice/invoice.service")
+        .then((m) => m.invoiceService.generateForOrder(String(order._id)))
+        .catch(console.error);
     }
 
     return order;
   },
 
-  /**
-   * Called by payment webhook or free-order shortcut.
-   * Idempotent — safe to retry.
-   */
   async markPaid(orderId: string, opts: { free?: boolean; subscriptionId?: string } = {}) {
     const order = await OrderModel.findById(orderId);
     if (!order) throw new AppError("Order not found", 404);
-    if (order.status === "paid") return order; // idempotent
+    if (order.status === "paid") return order;
     if (order.status !== "pending") {
       throw new AppError(`Cannot mark ${order.status} order as paid`, 400);
     }
 
-    // ⭐ STEP 1 — Atomic status flip FIRST.
-    // If two webhooks / verify calls race, only one wins here.
-    // This guarantees the order is "paid" even if downstream steps fail.
     const flip = await OrderModel.updateOne(
       { _id: orderId, status: "pending" },
       { $set: { status: "paid", paidAt: new Date() } }
     );
-    if (flip.modifiedCount === 0) {
-      // Another thread beat us — return current state
-      return await OrderModel.findById(orderId);
-    }
+    if (flip.modifiedCount === 0) return await OrderModel.findById(orderId);
 
-    // ⭐ STEP 2 — Reload the fresh paid doc
     const freshOrder = await OrderModel.findById(orderId);
     if (!freshOrder) throw new AppError("Order lost after update", 500);
 
-    // ⭐ STEP 3 — Grant entitlements + enrollments, per item, best-effort.
-    // If one item fails, we log it and continue — the order is already paid.
     for (const item of freshOrder.items) {
       if (item.entitlementGranted) continue;
-
       try {
         const ent = await entitlementService.grant({
           userId: freshOrder.user,
@@ -281,19 +365,16 @@ export const orderService = {
             source: opts.free ? "free" : "purchase",
             expiresAt: null,
           });
-
           await CourseModel.updateOne(
             { _id: item.refId },
             { $inc: { revenueCents: Math.round(item.finalPrice * 100) } }
           );
         }
 
-        // Platform subscription activation (stub — wire to plan service later)
         if (item.productType === "platform_subscription") {
-          // TODO: activate teacher's plan: TeacherProfile.findByIdAndUpdate(...)
+          // TODO: activate teacher's plan via planService
         }
 
-        // ⭐ Record affiliate commission AND adjust teacher earnings
         if (freshOrder.affiliateCode && item.commissionSnapshot?.enabled) {
           const commission = await affiliateService.recordCommission({
             affiliateCode: freshOrder.affiliateCode,
@@ -315,47 +396,32 @@ export const orderService = {
               { _id: orderId, "items._id": item._id },
               { $set: { "items.$.teacherEarning": newTeacherEarning } }
             );
-            console.log(
-              `[markPaid] Order ${orderId} item ${item._id}: teacher earning adjusted to $${newTeacherEarning.toFixed(2)} (was $${item.teacherEarning.toFixed(2)}, affiliate got $${(commission as any).amount.toFixed(2)})`
-            );
           }
         }
 
-        // Mark item as granted
         await OrderModel.updateOne(
           { _id: orderId, "items._id": item._id },
           { $set: { "items.$.entitlementGranted": true } }
         );
       } catch (err: any) {
-        console.error(
-          `[markPaid] Grant failed for order ${orderId} item ${item._id}:`,
-          err?.message
-        );
-        // Do NOT rethrow — order is already paid, don't block the customer.
-        // Admin can manually fix missing entitlements later.
+        console.error(`[markPaid] Grant failed for ${orderId} item ${item._id}:`, err?.message);
       }
     }
 
-    // ⭐ STEP 4 — Coupon commit (best-effort, logged)
     try {
       await couponService.commit(orderId);
     } catch (e: any) {
       console.error("[markPaid] Coupon commit failed:", e?.message);
     }
 
-    // ⭐ STEP 5 — Cart clear (direct model write, explicit logging)
     try {
       const { default: CartModel } = await import("../cart/cart.model");
-      const result = await CartModel.updateOne(
+      await CartModel.updateOne(
         { user: freshOrder.user },
         { $set: { items: [], couponId: null } }
       );
-      console.log(
-        `[markPaid] Cart cleared for user ${freshOrder.user}`,
-        { matched: result.matchedCount, modified: result.modifiedCount }
-      );
     } catch (e: any) {
-      console.error("[markPaid] CART CLEAR FAILED:", e?.message);
+      console.error("[markPaid] Cart clear failed:", e?.message);
     }
 
     return freshOrder;
@@ -395,22 +461,16 @@ export const orderService = {
     if (!order) throw new AppError("Order not found", 404);
     if (order.status !== "paid") throw new AppError("Only paid orders can be refunded", 400);
 
-    // Payment refund is handled by paymentService (caller responsibility) — this handles state
     order.status = "refunded";
     await order.save();
 
-    // Revoke entitlements
     for (const item of order.items) {
       const ent = await entitlementService.checkByRef(order.user, item.productType, item.refId);
       if (ent) await entitlementService.revoke(String(ent._id), reason);
     }
 
-    // Reverse coupon
     await couponService.reverse(order._id);
-
-    // Reverse affiliate commissions
     await affiliateService.reverseForOrder(order._id);
-
     return order;
   },
 
@@ -441,6 +501,5 @@ export const orderService = {
       return await OrderModel.findById(orderId);
     }
     return order;
-  }
-
+  },
 };

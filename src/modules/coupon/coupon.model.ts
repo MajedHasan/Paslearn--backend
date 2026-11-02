@@ -1,8 +1,13 @@
+// src/modules/coupon/coupon.model.ts
 import { Schema, model } from "mongoose";
 import { ICoupon, ICouponRedemption } from "./coupon.interface";
 
 const applicableToSchema = new Schema({
-  items: { type: [String], enum: ["courses", "digital", "coaching"], default: [] },
+  items: {
+    type: [String],
+    enum: ["courses", "digital", "coaching", "subscriptions", "addons"], // ⭐ extended
+    default: [],
+  },
   mode: { type: String, enum: ["all", "selected", "category"], default: "all" },
   selectedIds: { type: [String], default: [] },
   categories: { type: [String], default: [] },
@@ -12,6 +17,7 @@ const targetUsersSchema = new Schema({
   mode: { type: String, enum: ["all", "selected", "group"], default: "all" },
   userIds: { type: [String], default: [] },
   groupIds: { type: [String], default: [] },
+  userEmails: { type: [String], default: [] },
 }, { _id: false });
 
 const couponSchema = new Schema<ICoupon>({
@@ -36,11 +42,10 @@ const couponSchema = new Schema<ICoupon>({
   excludeDiscountedItems: { type: Boolean, default: false },
   status: { type: String, enum: ["active", "scheduled", "expired", "disabled"], default: "active", index: true },
   ownerType: { type: String, enum: ["admin", "teacher"], required: true, default: "admin" },
-  ownerId: { type: Schema.Types.ObjectId, ref: "User", default: null }, // null for admin coupons
+  ownerId: { type: Schema.Types.ObjectId, ref: "User", default: null },
   deletedAt: { type: Date, default: null, index: true },
 }, { timestamps: true });
 
-// Per-owner uniqueness — admin + each teacher can have their own GET10
 couponSchema.index({ code: 1, ownerType: 1, ownerId: 1 }, { unique: true });
 couponSchema.index({ status: 1, startDate: 1, endDate: 1 });
 couponSchema.index({ ownerType: 1, ownerId: 1, createdAt: -1 });

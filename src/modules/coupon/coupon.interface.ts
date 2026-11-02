@@ -1,15 +1,29 @@
+// src/modules/coupon/coupon.interface.ts
 import { Document, Types } from "mongoose";
 
 export type CouponType = "percentage" | "fixed" | "free_shipping" | "free" | "bogo";
 export type CouponStatus = "active" | "scheduled" | "expired" | "disabled";
-export type ApplicableItemType = "courses" | "digital" | "coaching";
+
+/**
+ * ⭐ Item types a coupon can target.
+ * TEACHER-owned coupons may only use: courses, digital, coaching
+ * ADMIN-owned coupons may only use:   subscriptions, addons
+ * This split is enforced in coupon.service.ts.
+ */
+export type ApplicableItemType =
+  | "courses"
+  | "digital"
+  | "coaching"
+  | "subscriptions"
+  | "addons";
+
 export type SelectionMode = "all" | "selected" | "category";
 export type UserTargetMode = "all" | "selected" | "group";
 
 export interface IApplicableTo {
   items: ApplicableItemType[];
   mode: SelectionMode;
-  selectedIds: string[];        // product/course IDs
+  selectedIds: string[];
   categories: string[];
 }
 
@@ -17,31 +31,32 @@ export interface ITargetUsers {
   mode: UserTargetMode;
   userIds: string[];
   groupIds: string[];
+  userEmails: string[];
 }
 
 export interface ICoupon extends Document {
-  code: string;                 // uppercase, unique
+  code: string;
   description?: string;
   type: CouponType;
-  value: number;                // % or fixed amount
+  value: number;
   minSpend?: number;
   maxDiscount?: number;
   currency: string;
   startDate: Date;
   endDate: Date;
-  usageLimit: number;           // 0 = unlimited
+  usageLimit: number;
   usedCount: number;
-  perUserLimit: number;         // 0 = unlimited
+  perUserLimit: number;
   appliesTo: IApplicableTo;
   targetUsers: ITargetUsers;
-  countries: string[];          // ISO codes; empty = all
+  countries: string[];
   campaign?: string;
   stackable: boolean;
   firstPurchaseOnly: boolean;
   excludeDiscountedItems: boolean;
   status: CouponStatus;
   ownerType: "admin" | "teacher";
-  ownerId?: Types.ObjectId;     // teacher ID if ownerType=teacher
+  ownerId?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date | null;
@@ -53,25 +68,25 @@ export interface ICouponRedemptionItem {
   product: Types.ObjectId;
   productType: string;
   refId: Types.ObjectId;
-  teacher: Types.ObjectId;         // NEW — for teacher-scoped queries
-  productTitle: string;            // NEW — snapshot (survives product deletion)
+  teacher: Types.ObjectId;
+  productTitle: string;
   originalPrice: number;
   discountApplied: number;
 }
 
 export interface ICouponRedemption extends Document {
   coupon: Types.ObjectId;
-  couponCode: string;              // NEW — snapshot (survives coupon delete/rename)
+  couponCode: string;
   user: Types.ObjectId;
-  userEmail: string;               // NEW — snapshot (for invoice/receipt exports)
+  userEmail: string;
   order?: Types.ObjectId;
-  orderNumber?: string;            // NEW — snapshot (survives order archival)
+  orderNumber?: string;
   discountAmount: number;
   currency: string;
   items: ICouponRedemptionItem[];
   status: RedemptionStatus;
-  committedAt?: Date | null;       // NEW
-  reversedAt?: Date | null;        // NEW
+  committedAt?: Date | null;
+  reversedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }

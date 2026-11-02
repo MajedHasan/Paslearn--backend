@@ -7,6 +7,7 @@ export interface IUser extends Document {
   role: "student" | "teacher" | "admin";
   emailVerified: boolean;
   profileImageUrl?: string;
+  country?: String,
 }
 
 const UserSchema = new Schema<IUser>(
@@ -21,6 +22,7 @@ const UserSchema = new Schema<IUser>(
     },
     emailVerified: { type: Boolean, default: false },
     profileImageUrl: { type: String },
+    country: { type: String, uppercase: true, trim: true },
   },
   { timestamps: true }
 );
