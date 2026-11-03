@@ -44,6 +44,7 @@ import reviewRoutes, {
 import qaRoutes from "../modules/course/qa/qa.routes";
 import analyticsRoutes from "../modules/course/analytics/analytics.routes";
 import adminCourseRoutes from "../modules/course/adminCourse.routes";
+import adminRoutes from "../modules/admin/adminDashboard.routes";
 import { adminTeacherPayoutRoutes } from "../modules/teacher/earnings/payout.routes";
 
 // -- Teacher earnings module
@@ -131,6 +132,7 @@ const routes = [
   { path: "/admin/cron", route: cronRoutes },
   { path: "/admin/course-ai", route: adminCourseAiRoutes },   // ⭐ correct admin AI
   { path: "/admin/teacher-payouts", route: adminTeacherPayoutRoutes },
+  { path: "/admin", route: adminRoutes },                       // ⭐ NEW — mounted last
   // ⭐ REMOVED: { path: "/admin/ai", route: courseAiRoutes } — was wrong (duplicate of teacher routes)
 ];
 

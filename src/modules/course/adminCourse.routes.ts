@@ -11,6 +11,7 @@ router.get("/", adminCourseController.listAll);
 router.get("/stats", adminCourseController.stats);
 router.get("/:id", adminCourseController.get);
 router.delete("/:id/purge", adminCourseController.purge);
+router.post("/:id/moderate", adminCourseController.moderate);  // ⭐ NEW
 router.post("/cleanup", adminCourseController.cleanupExpired);
 
 export default router;

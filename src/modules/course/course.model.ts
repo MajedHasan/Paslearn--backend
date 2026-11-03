@@ -109,6 +109,11 @@ const courseSchema = new Schema<ICourse>({
   embeddingRef: { type: String },
   aiSummary: { type: String },
 
+  // ⭐ MODERATION (admin review) — all optional, no defaults, no indexes
+  moderationReason: { type: String },
+  moderatedBy: { type: Schema.Types.ObjectId, ref: "User" },
+  moderatedAt: { type: Date },
+
   // ── Deletion & retention ──
   deletedAt: { type: Date, index: true },                 // no default so $exists:false works
   mediaRetentionUntil: { type: Date, index: true },

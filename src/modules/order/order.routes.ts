@@ -2,6 +2,8 @@ import { Router } from "express";
 import { orderController } from "./order.controller";
 import { requireAuth } from "../../middlewares/auth.middleware";
 import { requireRole } from "../../middlewares/role.middleware";
+import { adminOrderController } from "./adminOrder.controller";
+
 
 const router = Router();
 router.use(requireAuth);
@@ -19,4 +21,6 @@ export default router;
 // Admin refund route (mounted separately at /admin/orders)
 export const adminOrderRoutes = Router();
 adminOrderRoutes.use(requireAuth, requireRole("admin"));
+adminOrderRoutes.get("/counts", adminOrderController.counts);
+adminOrderRoutes.get("/", adminOrderController.listAll);
 adminOrderRoutes.post("/:id/refund", orderController.adminRefund);

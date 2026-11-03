@@ -108,6 +108,11 @@ export interface ICourse extends Document {
   embeddingRef?: string;
   aiSummary?: string;
 
+  // ⭐ MODERATION (admin review)
+  moderationReason?: string;
+  moderatedBy?: Types.ObjectId;
+  moderatedAt?: Date;
+
   // ── Deletion & retention ──
   deletedAt?: Date | null;
   mediaRetentionUntil?: Date | null;

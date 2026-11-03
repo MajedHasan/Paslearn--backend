@@ -75,6 +75,7 @@ export async function createTeacherApplication(
 
 export async function getTeacherProfile(userId: string) {
   return TeacherProfileModel.findOne({ user: userId })
+    .populate("user", "name email profileImageUrl")   // ⭐ add this
     .populate("selectedPlan")
     .populate("selectedTemplate")
     .lean();

@@ -165,7 +165,7 @@ export const courseService = {
 
   async listOwn(params: {
     userId: string;
-    state?: "active" | "archived" | "deleted" | "all";
+    state?: "active" | "archived" | "deleted" | "rejected" | "all";
     filter?: any;
     page?: number;
     limit?: number;
@@ -177,14 +177,27 @@ export const courseService = {
     const filter = { ...(params.filter || {}) };
     filter.teacher = params.userId;
 
+    // ⭐ Defensive: parseListQuery may copy request params into filter.
+    // Strip anything that isn't a Course field so it can't break the query.
+    delete filter.state;
+    delete filter.page;
+    delete filter.limit;
+    delete filter.sort;
+    delete filter.q;
+
     const state = params.state || "active";
     if (state === "archived") {
       filter.status = "archived";
       filter.deletedAt = { $exists: false };
     } else if (state === "deleted") {
+      // ⭐ Only soft-deleted (has an actual Date), never restored (null)
       filter.deletedAt = { $exists: true, $ne: null };
-      // deleted courses are always status=archived, so we don't force status
       delete filter.status;
+    } else if (state === "rejected") {
+      // ⭐ Drafts rejected by admin — has a moderationReason snapshot
+      filter.status = "draft";
+      filter.deletedAt = { $exists: false };
+      filter.moderationReason = { $exists: true, $ne: null };
     } else if (state === "all") {
       // no deletedAt/status filter
     } else {
@@ -192,6 +205,8 @@ export const courseService = {
       filter.deletedAt = { $exists: false };
       if (!filter.status) filter.status = { $ne: "archived" };
     }
+
+    console.log(`[listOwn] state=${state} filter=${JSON.stringify(filter)}`);
 
     return courseCrudService.list({
       filter,
@@ -321,6 +336,7 @@ export const courseService = {
     if (!validation.valid) throw new AppError(validation.errors.join("; "), 400);
     course.status = "published";
     if (!course.publishedAt) course.publishedAt = new Date();
+    course.moderationReason = undefined;   // ⭐ clear after successful publish
     await course.save();
     await productService.syncFromCourse(course);
     return course.toObject();
