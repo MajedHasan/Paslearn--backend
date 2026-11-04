@@ -19,6 +19,9 @@ const reviewSchema = new Schema<IReview>({
   },
   helpfulCount: { type: Number, default: 0 },
   flaggedBy: [{ type: Schema.Types.ObjectId, ref: "User" }],
+  flagReason: { type: String },
+  moderatedBy: { type: Schema.Types.ObjectId, ref: "User" },
+  moderatedAt: { type: Date },
 }, { timestamps: true });
 
 reviewSchema.index({ user: 1, course: 1 }, { unique: true });

@@ -20,6 +20,12 @@ export interface IReview extends Document {
   };
   helpfulCount: number;
   flaggedBy?: Types.ObjectId[];
+
+  // ⭐ moderation audit fields
+  flagReason?: string;
+  moderatedBy?: Types.ObjectId;
+  moderatedAt?: Date;
+
   createdAt: Date;
   updatedAt: Date;
 }

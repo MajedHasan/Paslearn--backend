@@ -2,6 +2,7 @@ import { Types } from "mongoose";
 import TeacherPayoutModel from "./teacherPayout.model";
 import OrderModel from "../../order/order.model";
 import { AppError } from "../../../utils/appError";
+import { platformSettingsService } from "../../platform-settings/settings.service";
 
 const MIN_WITHDRAW = 50;
 
@@ -87,6 +88,7 @@ export const teacherPayoutService = {
       methodDetails?: Record<string, any>;
     }
   ) {
+    const MIN_WITHDRAW = await platformSettingsService.getMinPayoutAmount();
     if (params.amount < MIN_WITHDRAW) {
       throw new AppError(
         `Minimum withdrawal is $${MIN_WITHDRAW}. You requested $${params.amount.toFixed(2)}.`,
@@ -208,6 +210,8 @@ export const teacherPayoutService = {
 
     const created: Array<{ teacherId: string; amount: number }> = [];
 
+    const MIN_WITHDRAW = await platformSettingsService.getMinPayoutAmount();
+    
     for (const t of teacherAgg) {
       const teacherId = String(t._id);
       const balances = await computeAvailableBalance(teacherId);

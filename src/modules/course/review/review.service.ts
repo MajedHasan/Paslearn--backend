@@ -105,8 +105,25 @@ export const reviewService = {
     return review;
   },
 
-  async adminModerate(reviewId: string, status: "visible" | "hidden" | "flagged") {
-    const review = await ReviewModel.findByIdAndUpdate(reviewId, { status }, { new: true });
+  async adminModerate(
+    reviewId: string,
+    status: "visible" | "hidden" | "flagged",
+    opts: { adminId?: string; reason?: string } = {}
+  ) {
+    const updates: any = {
+      status,
+      moderatedAt: new Date(),
+    };
+    if (opts.adminId) updates.moderatedBy = opts.adminId;
+    if (status === "hidden" || status === "flagged") {
+      if (opts.reason && opts.reason.trim()) {
+        updates.flagReason = opts.reason.trim();
+      }
+    } else {
+      updates.flagReason = null;
+    }
+
+    const review = await ReviewModel.findByIdAndUpdate(reviewId, updates, { new: true });
     if (!review) throw new AppError("Review not found", 404);
     await recalcCourseRating(review.course);
     return review;

@@ -9,6 +9,7 @@ import { enrollmentService } from "../course/enrollment/enrollment.service";
 import { affiliateService } from "../affiliate/affiliate.service";
 import { AppError } from "../../utils/appError";
 import { paymentService } from "../payments/payment.service";
+import { platformSettingsService } from "../platform-settings/settings.service";
 import config from "../../config";
 
 const PLATFORM_FEE_PERCENT = config.platform.platformFeePercentage || 10;
@@ -135,6 +136,9 @@ export const orderService = {
   ) {
     const cart = await CartModel.findOne({ user: userId });
     if (!cart || !cart.items.length) throw new AppError("Cart is empty", 400);
+
+    // ⭐ read platform fee from settings (falls back to 10 if unset)
+    const platformFeePercent = await platformSettingsService.getPlatformFeePercent();
 
     const existingPending = await OrderModel.findOne({
       user: userId,
@@ -263,7 +267,7 @@ export const orderService = {
       const product: any = productMap.get(pid);
       const discount = couponPreview?.discountByProduct[pid] || 0;
       const finalPrice = Math.max(0, i.priceSnapshot - discount);
-      const platformFee = Math.round(finalPrice * PLATFORM_FEE_PERCENT) / 100;
+      const platformFee = Math.round(finalPrice * platformFeePercent) / 100;
       return {
         product: i.product,
         productType: i.productType,

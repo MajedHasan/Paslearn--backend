@@ -46,6 +46,9 @@ import analyticsRoutes from "../modules/course/analytics/analytics.routes";
 import adminCourseRoutes from "../modules/course/adminCourse.routes";
 import adminRoutes from "../modules/admin/adminDashboard.routes";
 import { adminTeacherPayoutRoutes } from "../modules/teacher/earnings/payout.routes";
+import adminReviewModerationRoutes from "../modules/course/review/adminReviewModeration.routes";
+import adminSettingsRoutes from "../modules/platform-settings/adminSettings.routes";
+import publicPlatformSettingsRoutes from "../modules/platform-settings/publicSettings.routes";
 
 // -- Teacher earnings module
 import teacherEarningsRoutes from "../modules/teacher/earnings/earnings.routes";
@@ -89,6 +92,7 @@ const routes = [
   // ═══════════════════════════════════════════════════
   // Public
   // ═══════════════════════════════════════════════════
+  { path: "/public/platform-settings", route: publicPlatformSettingsRoutes },  // ⭐ NEW
   { path: "/public/courses", route: publicCourseRoutes },
   { path: "/coupons/validate", route: couponValidationRouter },
   { path: "/certificates", route: certificateRoutes },
@@ -126,6 +130,7 @@ const routes = [
   { path: "/admin/orders", route: adminOrderRoutes },
   { path: "/admin/entitlements", route: adminEntitlementRoutes },
   { path: "/admin/reviews", route: adminReviewRoutes },
+  { path: "/admin/review-moderation", route: adminReviewModerationRoutes },   // ⭐ NEW
   { path: "/admin/products", route: adminProductRoutes },
   { path: "/admin/affiliate", route: adminAffiliateRoutes },
   { path: "/admin/courses", route: adminCourseRoutes },
@@ -133,6 +138,7 @@ const routes = [
   { path: "/admin/course-ai", route: adminCourseAiRoutes },   // ⭐ correct admin AI
   { path: "/admin/teacher-payouts", route: adminTeacherPayoutRoutes },
   { path: "/admin", route: adminRoutes },                       // ⭐ NEW — mounted last
+  { path: "/admin/settings", route: adminSettingsRoutes },   // ⭐ NEW — mount BEFORE "/admin"
   // ⭐ REMOVED: { path: "/admin/ai", route: courseAiRoutes } — was wrong (duplicate of teacher routes)
 ];
 
